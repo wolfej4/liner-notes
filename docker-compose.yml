@@ -6,8 +6,14 @@ services:
     restart: unless-stopped
     # Unraid's nobody:users. Change to your own UID:GID elsewhere.
     user: "${PUID:-99}:${PGID:-100}"
-    env_file: .env
+    # Values come from Portainer's "Environment variables" section,
+    # or from a .env file next to this one when using docker compose directly.
     environment:
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+      - PUBLIC_URL=${PUBLIC_URL:-http://127.0.0.1:8089}
+      - POLL_MINUTES=${POLL_MINUTES:-10}
+      - GOOGLE_FONTS=${GOOGLE_FONTS:-true}
       - TZ=America/Chicago
     ports:
       - "8089:8080"

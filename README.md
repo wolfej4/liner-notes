@@ -23,13 +23,17 @@ double-counted. Re-importing the same files is safe; duplicates are ignored.
      Spotify requires HTTPS, except for loopback addresses like `http://127.0.0.1:8089/auth/callback`
      (`localhost` isn't accepted).
    - Copy the Client ID and Client secret.
-2. **Configure.** `cp .env.example .env` and fill it in.
-3. **Deploy.** `docker compose up -d --build`, or push this folder to a Git repo and create a
-   Portainer stack from it. Data lives in `/mnt/user/appdata/liner-notes`.
-4. **Put it behind your SSO.** Liner Notes has no login of its own. Anyone who can reach it can
+2. **Configure and deploy.**
+   - **Portainer:** push this folder to a Git repo, then Stacks > Add stack > **Repository**
+     (the web editor can't build images). Add `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and
+     `PUBLIC_URL` under **Environment variables** before deploying.
+   - **Command line:** `cp .env.example .env`, fill it in, then `docker compose up -d --build`.
+
+   Data lives in `/mnt/user/appdata/liner-notes`.
+3. **Put it behind your SSO.** Liner Notes has no login of its own. Anyone who can reach it can
    see your history, import files, and reconnect Spotify. Expose it only through Pangolin with
    Pocket ID authentication, or keep it on the LAN.
-5. **Open it,** drop in your export zip, and select **Connect Spotify**.
+4. **Open it,** drop in your export zip, and select **Connect Spotify**.
 
 ## Things Spotify limits
 
