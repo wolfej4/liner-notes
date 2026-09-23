@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Your account</h1>
+<p class="lede">Signed in as {{ user.email }}.</p>
+
+<section class="block" aria-labelledby="spotifyH">
+  <h2 id="spotifyH">Spotify</h2>
+  {% if not sp.configured %}
+  <p class="hint">Spotify sync isn't set up on this server yet{% if user.is_admin %}. Add the app's client ID and secret on the <a href="/admin#spotify">admin page</a>{% else %}. Ask the admin to set it up{% endif %}.</p>
+  {% elif sp.connected and not sp.needs_reconnect %}
+  <p class="status-line"><i class="dot {{ 'bad' if sp.last_error else 'ok' }}"></i>
+    Connected{% if sp.name %} as {{ sp.name }}{% endif %}. {% if sp.last_sync %}Last checked {{ sp.last_sync|when }}.{% endif %}</p>
+  {% if sp.last_error %}<p class="notice bad">{{ sp.last_error }}</p>{% endif %}
+  <p class="hint">New plays are recorded every {{ sp.poll_minutes }} minutes. Spotify requires signing in again by {{ sp.reconnect_by|day }}.</p>
+  <div class="actions" style="margin-top:14px">
+    <a class="btn" href="/spotify/connect">Reconnect</a>
+    <button class="btn danger" type="button" data-post="/api/spotify/disconnect" data-reload data-confirm="Stop recording new plays from Spotify? Your history stays.">Disconnect</button>
+  </div>
+  {% else %}
+  {% if sp.needs_reconnect %}<p class="notice">Spotify ended the connection, which it does six months after you sign in. Reconnect to keep recording new plays.</p>{% endif %}
+  {% if sp.last_error and not sp.needs_reconnect %}<p class="notice bad">{{ sp.last_error }}</p>{% endif %}
+  <p class="hint">Connect to record every new play automatically. Spotify only lets approved accounts use this app, so give {{ "the admin" if not user.is_admin else "yourself (on the admin page)" }} the email you use for Spotify first.</p>
+  <div class="actions" style="margin-top:14px"><a class="btn primary" href="/spotify/connect">{{ "Reconnect Spotify" if sp.needs_reconnect else "Connect Spotify" }}</a></div>
+  {% endif %}
+</section>
+
+<section class="block" aria-labelledby="recapH">
+  <h2 id="recapH">Email recaps</h2>
+  <p class="hint">A short summary of what you listened to: hours, top artists and songs, and new finds.{% if not mail_ready %} Email isn't set up on this server yet, so nothing will send until {{ "you add SMTP settings on the admin page" if user.is_admin else "the admin sets it up" }}.{% endif %}</p>
+  <form data-api="/api/account/newsletter">
+    <label class="check"><input type="checkbox" name="weekly" {% if user.news_weekly %}checked{% endif %}>
+      <span>Weekly recap<small>{{ weekday }}s around {{ send_hour }}, covering Monday through Sunday. <a href="/newsletter/preview?kind=week" target="_blank" rel="noopener">Preview last week's</a></small></span></label>
+    <label class="check"><input type="checkbox" name="monthly" {% if user.news_monthly %}checked{% endif %}>
+      <span>Monthly recap<small>On the 1st around {{ send_hour }}. <a href="/newsletter/preview?kind=month" target="_blank" rel="noopener">Preview last month's</a></small></span></label>
+    <button class="btn" type="submit">Save recap settings</button>
+    <div class="form-msg" role="status"></div>
+  </form>
+</section>
+
+<section class="block" aria-labelledby="profileH">
+  <h2 id="profileH">Profile</h2>
+  <form data-api="/api/account/profile" class="grid">
+    <div class="field"><label for="name">Name</label><input id="name" name="name" type="text" value="{{ user.name }}" required></div>
+    <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" value="{{ user.email }}" required></div>
+    <div><button class="btn" type="submit">Save profile</button><div class="form-msg" role="status"></div></div>
+  </form>
+</section>
+
+<section class="block" aria-labelledby="pwH">
+  <h2 id="pwH">{{ "Change password" if user.password_hash else "Set a password" }}</h2>
+  {% if not user.password_hash %}<p class="hint">You sign in with {{ oidc_label }}. A password is optional.</p>{% endif %}
+  <form data-api="/api/account/password" data-clear class="grid">
+    {% if user.password_hash %}
+    <div class="field"><label for="cur">Current password</label><input id="cur" name="current" type="password" autocomplete="current-password" required></div>
+    {% endif %}
+    <div class="field"><label for="new">New password</label><input id="new" name="new" type="password" autocomplete="new-password" minlength="{{ min_password }}" required></div>
+    <div><button class="btn" type="submit">Save password</button><div class="form-msg" role="status"></div></div>
+  </form>
+  {% if oidc %}<p class="hint">{% if user.oidc_sub %}Your account is linked to {{ oidc_label }}.{% else %}You can also sign in with {{ oidc_label }} if it uses {{ user.email }}.{% endif %}</p>{% endif %}
+</section>
+{% endblock %}
