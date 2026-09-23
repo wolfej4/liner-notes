@@ -1,0 +1,29 @@
+{{ headline }}
+
+{{ data.ms|hours }} of music in {{ label }}, across {{ data.plays|num }} plays of {{ data.artist_count|num }} artists.{% if change %} {{ change }}{% endif %}
+
+{% if data.artists %}
+Top artists
+{% for a in data.artists %}
+{{ loop.index }}. {{ a.name }} ({{ a.ms|hours }})
+{% endfor %}
+
+{% endif %}
+{% if data.tracks %}
+Most played songs
+{% for t in data.tracks %}
+{{ loop.index }}. {{ t.name }} by {{ t.artist }} ({{ t.plays|num }} plays)
+{% endfor %}
+
+{% endif %}
+{% if data.new_count %}
+You found {{ data.new_count|num }} new artist{{ "s" if data.new_count != 1 }}. The one you played most was {{ data.new_top }}.
+{% endif %}
+{% if busiest_label %}
+Your biggest day was {{ busiest_label }}, with {{ data.busiest.ms|hours }}.
+{% endif %}
+
+Open Liner Notes: {{ dashboard }}
+
+Change recap settings: {{ account }}
+Unsubscribe from all recaps: {{ unsubscribe }}

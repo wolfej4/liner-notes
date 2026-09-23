@@ -1,0 +1,5 @@
+Here's a link to set a new Liner Notes password for {{ email }}. It works for 2 days.
+
+{{ link }}
+
+If you didn't expect this, you can ignore it.

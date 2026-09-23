@@ -1,0 +1,4 @@
+{{ inviter }} invited you to Liner Notes, a dashboard for your Spotify listening history.
+
+Set up your account here (the link works for 7 days):
+{{ link }}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+{% if mode == "reset" %}
+<h1>Choose a new password</h1>
+<p class="lede">For {{ email }}. You'll be signed out everywhere else.</p>
+{% elif mode == "invite" %}
+<h1>You're invited</h1>
+<p class="lede">Set up your Liner Notes account for {{ email }}.</p>
+{% else %}
+<h1>Create an account</h1>
+<p class="lede">See every year of your Spotify listening, and get a recap by email if you'd like.</p>
+{% endif %}
+{% if oidc and mode != "reset" %}
+<a class="btn primary wide" href="/auth/oidc/login">Continue with {{ oidc_label }}</a>
+{% if mode == "invite" %}<p class="hint">Use the {{ oidc_label }} account with the email {{ email }}.</p>{% endif %}
+<div class="or">or set a password</div>
+{% endif %}
+<form data-api="{{ api }}">
+  {% if mode != "reset" %}
+  <div class="field"><label for="name">Your name</label><input id="name" name="name" type="text" autocomplete="name" required></div>
+  {% endif %}
+  {% if mode == "signup" %}
+  <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="username" required></div>
+  {% else %}
+  <input type="email" name="email_display" value="{{ email }}" autocomplete="username" hidden disabled>
+  {% endif %}
+  <div class="field"><label for="password">{{ "New password" if mode == "reset" else "Password" }}</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" minlength="{{ min_password }}" required>
+    <p class="hint">At least {{ min_password }} characters.</p></div>
+  <button class="btn {{ '' if oidc and mode != 'reset' else 'primary' }} wide" type="submit">{{ "Save password" if mode == "reset" else "Create account" }}</button>
+  <div class="form-msg" role="alert"></div>
+</form>
+{% if mode == "signup" %}<p class="after">Already have an account? <a href="/login">Sign in</a>.</p>{% endif %}
+{% endblock %}
