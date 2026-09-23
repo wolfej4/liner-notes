@@ -4,8 +4,6 @@ services:
     image: liner-notes:latest
     container_name: liner-notes
     restart: unless-stopped
-    # Unraid's nobody:users. Change to your own UID:GID elsewhere.
-    user: "${PUID:-99}:${PGID:-100}"
     # Values come from Portainer's "Environment variables" section,
     # or from a .env file next to this one when using docker compose directly.
     environment:
@@ -14,8 +12,16 @@ services:
       - PUBLIC_URL=${PUBLIC_URL:-http://127.0.0.1:8089}
       - POLL_MINUTES=${POLL_MINUTES:-10}
       - GOOGLE_FONTS=${GOOGLE_FONTS:-true}
+      # The app runs as this user; the data volume is handed to it on startup.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
       - TZ=America/Chicago
     ports:
       - "8089:8080"
     volumes:
-      - /mnt/user/appdata/liner-notes:/data
+      # A named Docker volume: no host folder to create or fix permissions on.
+      # To use a host folder instead, e.g. /opt/liner-notes, change this to /opt/liner-notes:/data
+      - liner-notes-data:/data
+
+volumes:
+  liner-notes-data:

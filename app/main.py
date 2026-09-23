@@ -63,6 +63,11 @@ def connect() -> sqlite3.Connection:
 
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not os.access(DATA_DIR, os.W_OK | os.X_OK):
+        raise SystemExit(
+            f"Liner Notes can't write to {DATA_DIR} (running as uid {os.getuid()}, gid {os.getgid()}). "
+            f"If /data is a host folder, run on the Docker host: chown -R {os.getuid()}:{os.getgid()} <that folder>"
+        )
     with closing(connect()) as con:
         con.execute("PRAGMA journal_mode=WAL")
         con.executescript(

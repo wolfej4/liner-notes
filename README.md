@@ -29,7 +29,7 @@ double-counted. Re-importing the same files is safe; duplicates are ignored.
      `PUBLIC_URL` under **Environment variables** before deploying.
    - **Command line:** `cp .env.example .env`, fill it in, then `docker compose up -d --build`.
 
-   Data lives in `/mnt/user/appdata/liner-notes`.
+   Data lives in the `liner-notes-data` Docker volume. Back it up with the rest of your volumes.
 3. **Put it behind your SSO.** Liner Notes has no login of its own. Anyone who can reach it can
    see your history, import files, and reconnect Spotify. Expose it only through Pangolin with
    Pocket ID authentication, or keep it on the LAN.
