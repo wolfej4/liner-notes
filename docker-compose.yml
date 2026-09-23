@@ -1,0 +1,15 @@
+services:
+  liner-notes:
+    build: .
+    image: liner-notes:latest
+    container_name: liner-notes
+    restart: unless-stopped
+    # Unraid's nobody:users. Change to your own UID:GID elsewhere.
+    user: "${PUID:-99}:${PGID:-100}"
+    env_file: .env
+    environment:
+      - TZ=America/Chicago
+    ports:
+      - "8089:8080"
+    volumes:
+      - /mnt/user/appdata/liner-notes:/data

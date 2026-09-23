@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liner Notes: your Spotify history</title>
+<meta name="liner-notes-api" content="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#EDEFF5; --surface:#FFFFFF; --surface-2:#E0E3ED; --ink:#1B1E30; --muted:#565B74; --line:#CDD2E0;
+  --accent:#B4640A; --accent-ink:#FFFFFF; --quiet:#B9BDCC;
+  --c1:#C9780F; --c2:#23877B; --c3:#C9574B; --c4:#6B5CC4; --c5:#3978B5; --c6:#7E8C22; --c7:#B24F8D; --c8:#8A6A3F;
+  --display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible","Segoe UI",system-ui,-apple-system,sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#191C2C; --surface:#22263B; --surface-2:#2C3150; --ink:#EDE9E1; --muted:#A2A7C2; --line:#353A58;
+    --accent:#F2A541; --accent-ink:#1B1E30; --quiet:#474D70;
+    --c1:#F2A541; --c2:#6CC4B8; --c3:#EE8577; --c4:#A99BE8; --c5:#72AEE6; --c6:#C3CF6E; --c7:#E08FC4; --c8:#CDB08A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#191C2C; --surface:#22263B; --surface-2:#2C3150; --ink:#EDE9E1; --muted:#A2A7C2; --line:#353A58;
+  --accent:#F2A541; --accent-ink:#1B1E30; --quiet:#474D70;
+  --c1:#F2A541; --c2:#6CC4B8; --c3:#EE8577; --c4:#A99BE8; --c5:#72AEE6; --c6:#C3CF6E; --c7:#E08FC4; --c8:#CDB08A;
+  color-scheme:dark;
+}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 72px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:1rem;line-height:1.55;-webkit-font-smoothing:antialiased}
+img,canvas,svg{max-width:100%}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+.num{font-variant-numeric:tabular-nums}
+[hidden]{display:none !important}
+
+/* top bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+@media (max-width:720px){.bar{position:static}}
+.bar .wrap{display:flex;align-items:center;gap:16px;min-height:60px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+.mark{font-family:var(--display);font-weight:800;font-size:1.2rem;letter-spacing:-.01em;display:flex;align-items:center;gap:9px;white-space:nowrap}
+.mark i{width:20px;height:20px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0 3px,var(--bg) 3.5px 5px,var(--ink) 5.5px 100%);display:inline-block}
+.years{display:flex;gap:4px;overflow-x:auto;flex:1 1 320px;scrollbar-width:thin;padding:2px}
+.yr{border:1px solid transparent;background:none;border-radius:999px;padding:5px 12px;cursor:pointer;white-space:nowrap;color:var(--muted)}
+.yr:hover{color:var(--ink);border-color:var(--line)}
+.yr[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tools label{color:var(--muted);font-size:.875rem}
+select,.btn{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.ghost{background:none}
+
+/* intake */
+.intake{min-height:calc(100vh - 80px);display:grid;align-items:center;padding:48px 0}
+.intake h1{font-family:var(--display);font-weight:800;font-size:clamp(2.4rem,6vw,4.4rem);line-height:1.02;letter-spacing:-.025em;margin:0 0 20px;max-width:14ch}
+.intake .lede{font-size:1.15rem;max-width:58ch;color:var(--muted);margin:0 0 32px}
+.intake-grid{display:grid;grid-template-columns:1fr;gap:32px}
+@media (min-width:880px){.intake-grid{grid-template-columns:1fr 1fr;gap:56px;align-items:start}}
+.steps{margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:36px 1fr;gap:10px;padding:14px 0;border-top:1px solid var(--line);max-width:60ch}
+.steps li::before{content:counter(s);font-family:var(--display);font-weight:800;font-size:1.4rem;line-height:1.2;color:var(--accent)}
+.drop{border:2px dashed var(--quiet);border-radius:18px;padding:40px 24px;text-align:center;background:var(--surface);transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--surface-2)}
+.drop p{margin:12px 0 0;color:var(--muted)}
+.drop .btn.primary{font-size:1.05rem;padding:10px 20px}
+.status{min-height:1.5em;margin-top:14px;font-weight:700}
+.status.err{color:var(--c3)}
+.fine{font-size:.9rem;color:var(--muted);margin-top:16px}
+
+/* dashboard */
+.hero{padding:48px 0 12px}
+.hero h1{font-family:var(--display);font-weight:800;font-size:clamp(2.2rem,5.6vw,4.2rem);line-height:1.02;letter-spacing:-.025em;margin:0 0 12px;max-width:22ch}
+.hero .lede{font-size:1.15rem;color:var(--muted);margin:0;max-width:64ch}
+.ribbon{position:relative;height:240px;margin-top:28px}
+@media (max-width:640px){.ribbon{height:180px}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0 0;padding:0;list-style:none;font-size:.9rem;color:var(--muted)}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend b{width:10px;height:10px;border-radius:2px;display:inline-block}
+.caption{font-size:.9rem;color:var(--muted);margin:6px 0 0}
+.facts{display:flex;flex-wrap:wrap;gap:24px 48px;margin:40px 0 0;padding:24px 0 0;border-top:1px solid var(--line)}
+.facts div{min-width:120px}
+.facts dt{color:var(--muted);font-size:.9rem}
+.facts dd{margin:2px 0 0;font-family:var(--display);font-weight:700;font-size:1.6rem;line-height:1.15}
+.facts dd small{display:block;font-family:var(--body);font-weight:400;font-size:.85rem;color:var(--muted)}
+.notice{background:var(--surface);border-left:4px solid var(--accent);padding:12px 16px;border-radius:0 8px 8px 0;margin:24px 0 0;max-width:80ch}
+
+section.block{padding:64px 0 0}
+section.block h2{font-family:var(--display);font-weight:700;font-size:clamp(1.5rem,3vw,2rem);letter-spacing:-.015em;margin:0 0 6px}
+section.block .intro{color:var(--muted);margin:0 0 20px;max-width:64ch}
+.split{display:grid;grid-template-columns:minmax(0,1fr);gap:56px}
+.split > *{min-width:0}
+@media (min-width:920px){.split{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr)}}
+.split > section.block{padding-top:64px}
+
+.seg{display:inline-flex;background:var(--surface-2);border-radius:10px;padding:3px;gap:2px;margin:0 8px 12px 0}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:8px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(20,24,40,.12)}
+
+ol.rank{list-style:none;margin:0;padding:0;max-height:760px;overflow-y:auto}
+ol.rank li + li{border-top:1px solid var(--line)}
+.row{position:relative;display:grid;grid-template-columns:2.4em minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;padding:10px 4px 12px;cursor:pointer}
+.row:hover{background:var(--surface)}
+.row::after{content:"";position:absolute;left:4px;bottom:4px;height:3px;width:calc(var(--w) - 8px);max-width:calc(100% - 8px);background:var(--accent);opacity:.55;border-radius:2px}
+.rank-n{font-family:var(--display);font-weight:700;color:var(--muted);text-align:right}
+.row:nth-child(1) .rank-n{color:var(--accent)}
+.who{min-width:0}
+.nm{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{display:block;font-size:.875rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.val{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.empty{color:var(--muted);padding:16px 0}
+
+.heat-scroll{overflow-x:auto}
+.heat{display:grid;grid-template-columns:2.6em repeat(24,minmax(10px,1fr));gap:2px;min-width:400px;font-size:.75rem;color:var(--muted)}
+.heat .c{aspect-ratio:1;border-radius:3px;background:var(--surface-2)}
+.heat .dl{align-self:center}
+.heat .hl{text-align:center}
+.peak{margin:14px 0 0}
+
+.meter{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) auto;gap:10px;align-items:center;margin:8px 0}
+.meter .t{height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+.meter .t i{display:block;height:100%;background:var(--c2);border-radius:5px}
+.meter span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meter .v{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.9rem}
+.habits{display:flex;flex-wrap:wrap;gap:24px 40px;margin:0 0 24px}
+.habits dt{color:var(--muted);font-size:.9rem}
+.habits dd{margin:0;font-family:var(--display);font-weight:700;font-size:1.6rem}
+h3{font-family:var(--display);font-weight:700;font-size:1.15rem;margin:28px 0 8px}
+
+.table-scroll{overflow-x:auto}
+table.years-t{width:100%;border-collapse:collapse;min-width:680px}
+.years-t th{text-align:left;font-weight:400;color:var(--muted);font-size:.875rem;padding:8px 10px;border-bottom:1px solid var(--line)}
+.years-t td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.years-t tr.on td{background:var(--surface)}
+.years-t .y button{font-family:var(--display);font-weight:800;font-size:1.3rem;background:none;border:0;padding:0;cursor:pointer;color:var(--ink);text-decoration:underline;text-decoration-color:var(--quiet);text-underline-offset:4px}
+.years-t .h{width:28%}
+.hb{display:flex;align-items:center;gap:10px}
+.hb i{display:block;height:12px;background:var(--accent);border-radius:3px;min-width:2px}
+.hb span{font-variant-numeric:tabular-nums;white-space:nowrap}
+.years-t .s{display:block;font-size:.85rem;color:var(--muted)}
+.linechart{position:relative;height:360px}
+@media (max-width:640px){.linechart{height:280px}}
+
+footer{padding:72px 0 48px;color:var(--muted);font-size:.9rem}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between;align-items:center}
+
+dialog{width:min(760px,calc(100% - 24px));max-height:calc(100% - 48px);border:0;border-radius:16px;padding:0;background:var(--bg);color:var(--ink);box-shadow:0 30px 80px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(15,17,30,.55)}
+.dlg{padding:24px clamp(18px,4vw,32px) 28px}
+.dlg header{display:flex;justify-content:space-between;align-items:start;gap:16px}
+.dlg h2{font-family:var(--display);font-weight:800;font-size:clamp(1.7rem,4vw,2.5rem);line-height:1.05;letter-spacing:-.02em;margin:0}
+.dlg .lede{color:var(--muted);margin:8px 0 0;max-width:60ch}
+.dlg .chart{position:relative;height:200px;margin:20px 0 8px}
+.close{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+
+/* spotify sync */
+.sync{display:flex;gap:8px;align-items:center}
+.sync-msg{font-size:.875rem;color:var(--muted);display:flex;align-items:center;gap:7px;white-space:nowrap}
+.sync-msg.err{color:var(--c3)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--c2);flex:none}
+.dot.bad{background:var(--c3)}
+a.btn{text-decoration:none;display:inline-block;white-space:nowrap}
+.connect-alt{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.connect-alt p{margin:0 0 12px;color:var(--muted)}
+.sync-info{margin:0;max-width:70ch}
+.sync-info + .sync-info{margin-top:6px}
+
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <div class="mark"><i aria-hidden="true"></i>Liner Notes</div>
+    <nav class="years" id="years" aria-label="Choose a year" hidden></nav>
+    <div class="tools" id="tools" hidden>
+      <label for="minMs">Count a play after</label>
+      <select id="minMs">
+        <option value="0">any time</option>
+        <option value="10000">10 seconds</option>
+        <option value="30000">30 seconds</option>
+        <option value="60000">1 minute</option>
+      </select>
+      <button class="btn" id="addBtn" type="button">Add files</button>
+    </div>
+    <div class="sync" id="sync" hidden></div>
+  </div>
+</header>
+
+<main>
+  <!-- Intake -->
+  <div class="wrap intake" id="intake">
+    <div class="intake-grid">
+      <div>
+        <h1>Every year of your Spotify listening, in one place</h1>
+        <p class="lede">Liner Notes reads the history files from your Spotify data export and turns them into charts. The files are read inside this browser and never sent anywhere.</p>
+        <ol class="steps">
+          <li><span>On Spotify's <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">Privacy settings</a> page, request <strong>Extended streaming history</strong>. That's the one with every play since you opened your account.</span></li>
+          <li><span>Wait for the email with your download link. Spotify quotes up to 30 days; it's often much faster.</span></li>
+          <li><span>Drop the zip here, or the <code>Streaming_History_Audio</code> JSON files from inside it.</span></li>
+        </ol>
+      </div>
+      <div>
+        <div class="drop" id="drop">
+          <button class="btn primary" id="pickBtn" type="button">Choose files</button>
+          <p>or drop <code>my_spotify_data.zip</code> here</p>
+        </div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+        <div class="connect-alt" id="intakeConnect" hidden>
+          <p>Waiting on your export? Connect Spotify now and new plays start recording right away. Add the export whenever it arrives.</p>
+          <a class="btn" href="auth/login">Connect Spotify</a>
+        </div>
+        <p class="fine">The regular Account data export works too, but it only covers the past year and leaves out skips, shuffle, and devices. You can add more files later; duplicates are ignored.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" hidden>
+    <div class="wrap">
+      <div class="hero">
+        <h1 id="headline"></h1>
+        <p class="lede" id="lede"></p>
+        <p class="notice" id="basicNotice" hidden>These files are the one-year account export. Request <strong>Extended streaming history</strong> from Spotify to see every year, plus skips, shuffle, and devices.</p>
+        <div class="ribbon"><canvas id="ribbon" aria-label="Hours listened each month"></canvas></div>
+        <ul class="legend" id="eraLegend"></ul>
+        <p class="caption">Each bar is a month, colored by the artist you played most that month. Select a bar to open that year.</p>
+        <dl class="facts" id="facts"></dl>
+      </div>
+
+      <div class="split">
+        <section class="block" aria-labelledby="topH">
+          <h2 id="topH">Most played</h2>
+          <p class="intro" id="topIntro">Select an artist, song, or album to see its history.</p>
+          <div>
+            <div class="seg" role="group" aria-label="What to rank">
+              <button type="button" data-tab="artists" aria-pressed="true">Artists</button>
+              <button type="button" data-tab="tracks" aria-pressed="false">Songs</button>
+              <button type="button" data-tab="albums" aria-pressed="false">Albums</button>
+            </div>
+            <div class="seg" role="group" aria-label="Rank by">
+              <button type="button" data-sort="ms" aria-pressed="true">Time</button>
+              <button type="button" data-sort="plays" aria-pressed="false">Plays</button>
+            </div>
+          </div>
+          <ol class="rank" id="topList"></ol>
+        </section>
+
+        <div>
+          <section class="block" aria-labelledby="whenH">
+            <h2 id="whenH">When you listen</h2>
+            <p class="intro">Hours by day of week and hour of day, in this device's time zone.</p>
+            <div class="heat-scroll"><div class="heat" id="heat"></div></div>
+            <p class="peak" id="peak"></p>
+          </section>
+
+          <section class="block" aria-labelledby="habitH">
+            <h2 id="habitH">How you listen</h2>
+            <dl class="habits" id="habits"></dl>
+            <p class="intro" id="habitsNote" hidden>Skips, shuffle, devices, and countries only appear in the extended history export.</p>
+            <div id="platforms"></div>
+            <div id="countries"></div>
+            <div id="shows"></div>
+          </section>
+        </div>
+      </div>
+
+      <section class="block" aria-labelledby="yearsH">
+        <h2 id="yearsH">Year by year</h2>
+        <p class="intro">Select a year to filter everything on this page.</p>
+        <div class="table-scroll"><table class="years-t" id="yearTable"></table></div>
+      </section>
+
+      <section class="block" aria-labelledby="trajH">
+        <h2 id="trajH">Your all-time top artists, over time</h2>
+        <p class="intro">Hours per year for the eight artists you've played most overall.</p>
+        <div class="linechart"><canvas id="traj" aria-label="Hours per year for top artists"></canvas></div>
+      </section>
+    </div>
+    <footer>
+      <div class="wrap">
+        <div>
+          <p class="sync-info" id="coverage"></p>
+          <p class="sync-info" id="syncInfo" hidden></p>
+        </div>
+        <button class="btn ghost" id="clearBtn" type="button">Remove my data from this browser</button>
+      </div>
+    </footer>
+  </div>
+</main>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <div class="dlg">
+    <header>
+      <div>
+        <h2 id="dlgTitle"></h2>
+        <p class="lede" id="dlgLede"></p>
+      </div>
+      <button class="close" type="button" id="dlgClose">Close</button>
+    </header>
+    <div class="chart"><canvas id="dlgChart" aria-label="Hours per month"></canvas></div>
+    <p class="caption" id="dlgCaption"></p>
+    <h3 id="dlgListH">Most played songs</h3>
+    <ol class="rank" id="dlgList" style="max-height:none"></ol>
+  </div>
+</dialog>
+
+<input type="file" id="fileInput" accept=".json,.zip,application/json,application/zip" multiple hidden>
+
+<script id="core">
+const Core = (() => {
+  const DAY = 864e5;
+
+  function platformName(p) {
+    if (!p) return 'Unknown';
+    const s = String(p).toLowerCase();
+    if (s.includes('cast')) return 'Cast';
+    if (s.includes('ios') || s.includes('iphone') || s.includes('ipad')) return 'iOS';
+    if (s.includes('web')) return 'Web player';
+    if (s.includes('android')) return 'Android';
+    if (s.includes('windows')) return 'Windows';
+    if (s.includes('os x') || s.includes('osx') || s.includes('macos') || s.includes('mac os')) return 'macOS';
+    if (s.includes('linux')) return 'Linux';
+    if (s.includes('playstation') || s.includes('ps4') || s.includes('ps5')) return 'PlayStation';
+    if (s.includes('xbox')) return 'Xbox';
+    if (s.includes('sonos')) return 'Sonos';
+    if (s.includes('tv')) return 'TV';
+    return 'Other';
+  }
+
+  // Turn raw export rows (extended or basic format) into compact records.
+  function normalize(raw) {
+    const out = [];
+    if (!Array.isArray(raw)) return out;
+    for (const r of raw) {
+      if (!r || typeof r !== 'object') continue;
+      if ('ts' in r) {
+        const t = Date.parse(r.ts);
+        if (isNaN(t)) continue;
+        const ms = +r.ms_played || 0;
+        const base = { t, ms, pf: platformName(r.platform), cc: r.conn_country || '',
+          sk: r.skipped === true || r.reason_end === 'fwdbtn', sh: !!r.shuffle, off: !!r.offline, x: 1 };
+        if (r.master_metadata_track_name) {
+          out.push(Object.assign(base, { k: 'm', tr: r.master_metadata_track_name,
+            ar: r.master_metadata_album_artist_name || 'Unknown artist', al: r.master_metadata_album_album_name || '' }));
+        } else if (r.episode_show_name || r.episode_name) {
+          out.push(Object.assign(base, { k: 'p', tr: r.episode_name || '', ar: r.episode_show_name || 'Unknown show', al: '' }));
+        } else if (r.audiobook_title) {
+          out.push(Object.assign(base, { k: 'p', tr: r.audiobook_chapter_title || '', ar: r.audiobook_title, al: '' }));
+        }
+      } else if ('endTime' in r) {
+        const t = Date.parse(String(r.endTime).replace(' ', 'T') + ':00Z');
+        if (isNaN(t)) continue;
+        const ms = +r.msPlayed || 0;
+        const base = { t, ms, pf: '', cc: '', sk: false, sh: false, off: false, x: 0 };
+        if (r.trackName) out.push(Object.assign(base, { k: 'm', tr: r.trackName, ar: r.artistName || 'Unknown artist', al: '' }));
+        else if (r.podcastName || r.episodeName) out.push(Object.assign(base, { k: 'p', tr: r.episodeName || '', ar: r.podcastName || 'Unknown show', al: '' }));
+      }
+    }
+    return out;
+  }
+
+  // Combine old and new records. Sources: x=1 extended export, x=0 basic export, x=2 synced from the Spotify API.
+  // For any stretch of time the richest source wins: extended, then basic, then API sync.
+  function merge(a, b) {
+    let all = a.concat(b);
+    let extMax = -Infinity, basicMax = -Infinity;
+    for (const r of all) {
+      if (r.x === 1 && r.t > extMax) extMax = r.t;
+      if (r.x === 0 && r.t > basicMax) basicMax = r.t;
+    }
+    if (extMax > -Infinity) all = all.filter(r => r.x === 1 || r.t > extMax + 60000);
+    if (basicMax > -Infinity) all = all.filter(r => r.x !== 2 || r.t > basicMax + 60000);
+    const seen = new Set(), out = [];
+    for (const r of all) {
+      const key = r.t + '|' + r.ms + '|' + r.tr;
+      if (seen.has(key)) continue;
+      seen.add(key); out.push(r);
+    }
+    out.sort((p, q) => p.t - q.t);
+    return out;
+  }
+
+  function bump(map, key, r, counted, init) {
+    let o = map.get(key);
+    if (!o) { o = Object.assign({}, init, { ms: 0, plays: 0, first: r.t, last: r.t }); map.set(key, o); }
+    o.ms += r.ms; if (counted) o.plays++; o.last = r.t;
+  }
+  const byMs = m => [...m].sort((a, b) => b[1] - a[1]);
+
+  // Stats for one year (or all time when year is null).
+  function compute(recs, { year, minMs }) {
+    const A = new Map(), T = new Map(), L = new Map(), P = new Map(), C = new Map(), S = new Map(), D = new Map();
+    const heat = Array.from({ length: 7 }, () => new Array(24).fill(0));
+    let ms = 0, plays = 0, rich = 0, skips = 0, shuf = 0, off = 0, podMs = 0, first = null, last = null, n = 0;
+    for (const r of recs) {
+      const d = new Date(r.t), y = d.getFullYear();
+      if (year != null && y !== year) continue;
+      if (r.k === 'p') { podMs += r.ms; S.set(r.ar, (S.get(r.ar) || 0) + r.ms); continue; }
+      n++; ms += r.ms;
+      const counted = r.ms >= minMs;
+      if (counted) plays++;
+      if (first === null) first = r.t;
+      last = r.t;
+      bump(A, r.ar, r, counted, { name: r.ar, artist: r.ar });
+      bump(T, r.ar + '\u0001' + r.tr, r, counted, { name: r.tr, sub: r.ar, artist: r.ar });
+      if (r.al) bump(L, r.ar + '\u0001' + r.al, r, counted, { name: r.al, sub: r.ar, artist: r.ar });
+      heat[d.getDay()][d.getHours()] += r.ms;
+      const dn = Date.UTC(y, d.getMonth(), d.getDate()) / DAY;
+      D.set(dn, (D.get(dn) || 0) + r.ms);
+      if (r.x === 1) {
+        rich++;
+        if (r.sk) skips++; if (r.sh) shuf++; if (r.off) off++;
+        P.set(r.pf, (P.get(r.pf) || 0) + r.ms);
+        if (r.cc) C.set(r.cc, (C.get(r.cc) || 0) + r.ms);
+      }
+    }
+    const days = [...D.keys()].sort((a, b) => a - b);
+    let streak = 0, streakEnd = null, run = 0, prev = null;
+    for (const dn of days) {
+      run = (prev !== null && dn === prev + 1) ? run + 1 : 1;
+      if (run > streak) { streak = run; streakEnd = dn; }
+      prev = dn;
+    }
+    let busiest = null;
+    for (const [dn, v] of D) if (!busiest || v > busiest.ms) busiest = { dn, ms: v };
+    return {
+      n, ms, plays, first, last, days: D.size, streak, streakEnd, busiest, heat,
+      artistCount: A.size, trackCount: T.size,
+      topArtists: [...A.values()], topTracks: [...T.values()], topAlbums: [...L.values()],
+      platforms: byMs(P), countries: byMs(C), shows: byMs(S), podMs, rich,
+      skipRate: rich ? skips / rich : null, shuffleRate: rich ? shuf / rich : null, offlineRate: rich ? off / rich : null
+    };
+  }
+
+  // Whole-history views: monthly ribbon, per-year summaries, artist trajectories.
+  function history(recs, minMs) {
+    const months = new Map(), years = new Map(), firstYear = new Map(), artistYear = new Map(), artistTotal = new Map();
+    for (const r of recs) {
+      if (r.k !== 'm') continue;
+      const d = new Date(r.t), y = d.getFullYear(), mk = y * 12 + d.getMonth();
+      let mo = months.get(mk);
+      if (!mo) { mo = { ms: 0, art: new Map() }; months.set(mk, mo); }
+      mo.ms += r.ms; mo.art.set(r.ar, (mo.art.get(r.ar) || 0) + r.ms);
+      let yr = years.get(y);
+      if (!yr) { yr = { y, ms: 0, plays: 0, A: new Map(), T: new Map(), newArtists: 0 }; years.set(y, yr); }
+      yr.ms += r.ms; if (r.ms >= minMs) yr.plays++;
+      yr.A.set(r.ar, (yr.A.get(r.ar) || 0) + r.ms);
+      const tk = r.tr + '\u0001' + r.ar;
+      yr.T.set(tk, (yr.T.get(tk) || 0) + r.ms);
+      if (!firstYear.has(r.ar)) { firstYear.set(r.ar, y); yr.newArtists++; }
+      artistTotal.set(r.ar, (artistTotal.get(r.ar) || 0) + r.ms);
+      let ay = artistYear.get(r.ar);
+      if (!ay) { ay = new Map(); artistYear.set(r.ar, ay); }
+      ay.set(y, (ay.get(y) || 0) + r.ms);
+    }
+    if (!months.size) return null;
+    const keys = [...months.keys()].sort((a, b) => a - b);
+    const monthList = [], wins = new Map();
+    for (let k = keys[0]; k <= keys[keys.length - 1]; k++) {
+      const mo = months.get(k);
+      let top = null, topMs = 0;
+      if (mo) for (const [a, v] of mo.art) if (v > topMs) { top = a; topMs = v; }
+      monthList.push({ key: k, y: Math.floor(k / 12), m: k % 12, ms: mo ? mo.ms : 0, top, topMs });
+      if (top) wins.set(top, (wins.get(top) || 0) + 1);
+    }
+    const eraArtists = byMs(wins).slice(0, 8).map(e => e[0]);
+    const yearList = [...years.values()].sort((a, b) => a.y - b.y).map(yr => {
+      const ta = byMs(yr.A)[0], tt = byMs(yr.T)[0];
+      const [ttName, ttArtist] = tt[0].split('\u0001');
+      return { y: yr.y, ms: yr.ms, plays: yr.plays, newArtists: yr.newArtists, artists: yr.A.size,
+        topArtist: ta[0], topArtistMs: ta[1], topTrack: ttName, topTrackArtist: ttArtist };
+    });
+    const yearNums = yearList.map(y => y.y);
+    const trajectories = byMs(artistTotal).slice(0, 8).map(([name]) =>
+      ({ name, data: yearNums.map(y => artistYear.get(name).get(y) || 0) }));
+    return { monthList, eraArtists, yearList, trajectories, years: yearNums };
+  }
+
+  // Everything about one artist, all time.
+  function artistDetail(recs, name, minMs) {
+    const months = new Map(), T = new Map();
+    let ms = 0, plays = 0, first = null, last = null, firstTrack = null;
+    for (const r of recs) {
+      if (r.k !== 'm' || r.ar !== name) continue;
+      const d = new Date(r.t), mk = d.getFullYear() * 12 + d.getMonth();
+      months.set(mk, (months.get(mk) || 0) + r.ms);
+      ms += r.ms; if (r.ms >= minMs) plays++;
+      if (first === null) { first = r.t; firstTrack = r.tr; }
+      last = r.t;
+      let t = T.get(r.tr);
+      if (!t) { t = { name: r.tr, ms: 0, plays: 0 }; T.set(r.tr, t); }
+      t.ms += r.ms; if (r.ms >= minMs) t.plays++;
+    }
+    if (!months.size) return null;
+    const keys = [...months.keys()].sort((a, b) => a - b);
+    const series = [];
+    let peak = null;
+    for (let k = keys[0]; k <= keys[keys.length - 1]; k++) {
+      const v = months.get(k) || 0;
+      series.push({ key: k, y: Math.floor(k / 12), m: k % 12, ms: v });
+      if (!peak || v > peak.ms) peak = { key: k, y: Math.floor(k / 12), m: k % 12, ms: v };
+    }
+    return { name, ms, plays, first, last, firstTrack, series, peak, trackCount: T.size,
+      tracks: [...T.values()].sort((a, b) => b.ms - a.ms).slice(0, 15) };
+  }
+
+  return { normalize, merge, compute, history, artistDetail, platformName, DAY };
+})();
+if (typeof module !== 'undefined') module.exports = Core;
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const DAY = Core.DAY;
+  const state = { records: null, year: null, tab: 'artists', sort: 'ms', minMs: 30000, hist: null, histKey: '' };
+  const charts = {};
+
+  /* ---------- server mode (when served by the Liner Notes container) ---------- */
+  const API = (document.querySelector('meta[name="liner-notes-api"]') || {}).content || '';
+  const COLS = ['t', 'ms', 'k', 'tr', 'ar', 'al', 'pf', 'cc', 'sk', 'sh', 'off', 'x'];
+  const toRow = r => COLS.map(c => typeof r[c] === 'boolean' ? (r[c] ? 1 : 0) : r[c]);
+  const fromRow = a => ({ t: a[0], ms: a[1], k: a[2], tr: a[3], ar: a[4], al: a[5], pf: a[6], cc: a[7], sk: !!a[8], sh: !!a[9], off: !!a[10], x: a[11] });
+  async function api(path, opts = {}) {
+    const headers = { 'X-Liner-Notes': '1' };
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    const r = await fetch(API + path, Object.assign({ credentials: 'same-origin' }, opts, { headers }));
+    if (!r.ok) {
+      let msg = 'The server returned an error (' + r.status + ').';
+      try { const j = await r.json(); if (j.detail) msg = j.detail; } catch (e) {}
+      throw new Error(msg);
+    }
+    return r.json();
+  }
+  async function loadServerRecords() {
+    const rows = await api('api/records');
+    return Core.merge([], rows.map(fromRow));
+  }
+
+  try { const v = localStorage.getItem('ln-minMs'); if (v !== null) state.minMs = +v; } catch (e) {}
+  $('minMs').value = String(state.minMs);
+
+  /* ---------- formatting ---------- */
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmtN = n => Math.round(n).toLocaleString();
+  const fmtH = ms => {
+    const h = ms / 36e5;
+    if (h >= 100) return fmtN(h) + ' h';
+    if (h >= 1) return h.toFixed(1) + ' h';
+    return Math.max(0, Math.round(ms / 6e4)) + ' min';
+  };
+  const pct = x => x == null ? '—' : Math.round(x * 100) + '%';
+  const fmtDate = t => new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  const fmtDn = dn => new Date(dn * DAY).toLocaleDateString(undefined, { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
+  const monthName = (y, m, style = 'short') => new Date(Date.UTC(y, m, 15)).toLocaleDateString(undefined, { timeZone: 'UTC', month: style, year: 'numeric' });
+  const hourName = h => new Date(2020, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' });
+  const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const palette = () => ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7', '--c8'].map(tok);
+  let regionNames = null;
+  try { regionNames = new Intl.DisplayNames(undefined, { type: 'region' }); } catch (e) {}
+  const country = cc => { try { return (regionNames && regionNames.of(cc)) || cc; } catch (e) { return cc; } };
+
+  /* ---------- storage (IndexedDB, this browser only) ---------- */
+  const DB = {
+    open() {
+      return new Promise((res, rej) => {
+        const q = indexedDB.open('liner-notes', 1);
+        q.onupgradeneeded = () => q.result.createObjectStore('kv');
+        q.onsuccess = () => res(q.result);
+        q.onerror = () => rej(q.error);
+      });
+    },
+    async get(k) {
+      try {
+        const db = await this.open();
+        return await new Promise((res, rej) => {
+          const r = db.transaction('kv').objectStore('kv').get(k);
+          r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+        });
+      } catch (e) { return undefined; }
+    },
+    async set(k, v) {
+      try {
+        const db = await this.open();
+        await new Promise((res, rej) => {
+          const tx = db.transaction('kv', 'readwrite');
+          tx.objectStore('kv').put(v, k);
+          tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+        });
+        return true;
+      } catch (e) { return false; }
+    },
+    async del(k) {
+      try {
+        const db = await this.open();
+        await new Promise((res, rej) => {
+          const tx = db.transaction('kv', 'readwrite');
+          tx.objectStore('kv').delete(k);
+          tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+        });
+      } catch (e) {}
+    }
+  };
+
+  /* ---------- reading files ---------- */
+  const setStatus = (msg, err) => { const s = $('status'); s.textContent = msg; s.classList.toggle('err', !!err); };
+  const wanted = name => /\.json$/i.test(name) && /(streaming_?history|endsong)/i.test(name) && !/video/i.test(name);
+
+  const addAll = (into, arr) => { for (let i = 0; i < arr.length; i++) into.push(arr[i]); };
+  async function readFiles(files) {
+    const found = [], bad = [];
+    let jsonCount = 0;
+    for (const f of files) {
+      if (/\.zip$/i.test(f.name)) {
+        if (typeof JSZip === 'undefined') throw new Error('The zip reader didn\'t load. Unzip the export and choose the JSON files instead.');
+        setStatus('Opening ' + f.name + '…');
+        const zip = await JSZip.loadAsync(f);
+        const entries = Object.values(zip.files).filter(e => !e.dir && wanted(e.name.split('/').pop()));
+        for (const e of entries) {
+          setStatus('Reading ' + e.name.split('/').pop() + '…');
+          try { addAll(found, Core.normalize(JSON.parse(await e.async('string')))); jsonCount++; } catch (err) { bad.push(e.name.split('/').pop()); }
+        }
+      } else if (/\.json$/i.test(f.name)) {
+        setStatus('Reading ' + f.name + '…');
+        try { addAll(found, Core.normalize(JSON.parse(await f.text()))); jsonCount++; } catch (err) { bad.push(f.name); }
+      }
+    }
+    return { found, jsonCount, bad };
+  }
+
+  async function ingest(files) {
+    if (!files || !files.length) return;
+    showIntake();
+    try {
+      const { found, jsonCount, bad } = await readFiles([...files]);
+      const badNote = bad.length ? ' Couldn\'t read ' + bad.join(', ') + '.' : '';
+      const music = found.filter(r => r.k === 'm').length;
+      if (!music) {
+        setStatus(jsonCount
+          ? 'Those files have no song plays in them. Look for files named Streaming_History_Audio_… or StreamingHistory_music_….'
+          : 'No listening history found. Choose the zip from Spotify, or the Streaming_History_Audio JSON files inside it.' + badNote, true);
+        if (state.records) showDash();
+        return;
+      }
+      if (API) {
+        for (let i = 0; i < found.length; i += 20000) {
+          setStatus('Saving to your server… ' + Math.min(100, Math.round((i + 20000) / found.length * 100)) + '%');
+          await api('api/records', { method: 'POST', body: JSON.stringify({ rows: found.slice(i, i + 20000).map(toRow) }) });
+        }
+        setStatus('Building your charts…');
+        state.records = await loadServerRecords();
+        state.hist = null;
+        setStatus(badNote.trim());
+        showDash();
+        render();
+        refreshStatus(false);
+        return;
+      }
+      setStatus('Building your charts…');
+      state.records = Core.merge(state.records || [], found);
+      state.hist = null;
+      const saved = await DB.set('records', state.records);
+      setStatus((saved ? '' : 'Loaded. This browser wouldn\'t store the data, so you\'ll need to add the files again next visit.') + badNote);
+      showDash();
+      render();
+    } catch (e) {
+      setStatus(e.message || 'Those files couldn\'t be read. Try the JSON files from inside the zip.', true);
+    }
+  }
+
+  /* ---------- screens ---------- */
+  function showIntake() { $('intake').hidden = false; $('dash').hidden = true; $('years').hidden = true; $('tools').hidden = true; }
+  function showDash() { $('intake').hidden = true; $('dash').hidden = false; $('years').hidden = false; $('tools').hidden = false; }
+
+  /* ---------- rendering ---------- */
+  function themeCharts() {
+    if (typeof Chart === 'undefined') return false;
+    Chart.defaults.color = tok('--muted');
+    Chart.defaults.borderColor = tok('--line');
+    Chart.defaults.font.family = tok('--body') || 'system-ui';
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) Chart.defaults.animation = false;
+    return true;
+  }
+  function makeChart(id, cfg) {
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart($(id), cfg);
+  }
+  function getHist() {
+    const key = state.records.length + ':' + state.minMs;
+    if (state.histKey !== key || !state.hist) { state.hist = Core.history(state.records, state.minMs); state.histKey = key; }
+    return state.hist;
+  }
+
+  function render() {
+    if (!state.records) return;
+    const hist = getHist();
+    if (!hist) return;
+    if (state.year != null && !hist.years.includes(state.year)) state.year = null;
+    const s = Core.compute(state.records, { year: state.year, minMs: state.minMs });
+    const hasCharts = themeCharts();
+    renderYears(hist);
+    renderHero(s, hist, hasCharts);
+    renderTop(s);
+    renderHeat(s);
+    renderHabits(s);
+    renderYearTable(hist);
+    if (hasCharts) renderTrajectories(hist);
+    const all = state.records.filter(r => r.k === 'm');
+    $('coverage').textContent = all.length
+      ? fmtN(all.length) + ' song plays from ' + fmtDate(all[0].t) + ' to ' + fmtDate(all[all.length - 1].t) + (API ? ', stored on your server.' : ', stored only in this browser.')
+      : '';
+    $('basicNotice').hidden = state.records.some(r => r.x === 1);
+  }
+
+  // One color per artist, shared by the ribbon and the trajectories chart.
+  function artistColors(hist) {
+    const cols = palette(), color = {}, used = new Set();
+    hist.eraArtists.forEach((a, i) => { color[a] = cols[i]; used.add(i); });
+    let next = 0;
+    for (const t of hist.trajectories) {
+      if (color[t.name]) continue;
+      while (used.has(next) && used.size < cols.length) next++;
+      const i = next % cols.length;
+      color[t.name] = cols[i]; used.add(i); next++;
+    }
+    return color;
+  }
+
+  function renderYears(hist) {
+    const opts = [{ v: null, l: 'All time' }].concat(hist.years.map(y => ({ v: y, l: String(y) })));
+    $('years').innerHTML = opts.map(o =>
+      `<button class="yr" type="button" data-year="${o.v ?? ''}" aria-pressed="${o.v === state.year}">${o.l}</button>`).join('');
+    const on = $('years').querySelector('[aria-pressed="true"]');
+    if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function renderHero(s, hist, hasCharts) {
+    const hours = fmtN(s.ms / 36e5);
+    $('headline').textContent = state.year == null
+      ? `${hours} hours of music since ${monthName(new Date(s.first).getFullYear(), new Date(s.first).getMonth(), 'long')}`
+      : `${hours} hours of music in ${state.year}`;
+    $('lede').textContent = `${fmtN(s.plays)} plays of ${fmtN(s.trackCount)} different songs by ${fmtN(s.artistCount)} artists, on ${fmtN(s.days)} different days.`;
+
+    const quiet = tok('--quiet');
+    const color = artistColors(hist);
+    $('eraLegend').innerHTML = hist.eraArtists.map(a => `<li><b style="background:${color[a]}"></b>${esc(a)}</li>`).join('')
+      + `<li><b style="background:${quiet}"></b>Everyone else</li>`;
+
+    if (hasCharts) {
+      const ml = hist.monthList;
+      const spanYears = hist.years.length;
+      makeChart('ribbon', {
+        type: 'bar',
+        data: {
+          labels: ml.map(m => monthName(m.y, m.m)),
+          datasets: [{
+            data: ml.map(m => +(m.ms / 36e5).toFixed(2)),
+            backgroundColor: ml.map(m => {
+              const c = (m.top && color[m.top]) || quiet;
+              return state.year != null && m.y !== state.year ? c + '40' : c;
+            }),
+            borderRadius: 2, barPercentage: 1, categoryPercentage: .86
+          }]
+        },
+        options: {
+          maintainAspectRatio: false, responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: {
+              label: c => fmtH(ml[c.dataIndex].ms),
+              afterLabel: c => ml[c.dataIndex].top ? 'Most played: ' + ml[c.dataIndex].top : ''
+            } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0,
+              callback: function (v, i) {
+                if (ml[i].m !== 0) return '';
+                const step = Math.max(1, Math.ceil(spanYears * 44 / (this.chart.width || 800)));
+                return (ml[i].y - hist.years[0]) % step === 0 ? ml[i].y : '';
+              } } },
+            y: { beginAtZero: true, ticks: { callback: v => v + ' h', maxTicksLimit: 5 }, grid: { color: tok('--line') } }
+          },
+          onClick: (e, els) => { if (els.length) setYear(ml[els[0].index].y); },
+          onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+        }
+      });
+    }
+
+    const hourTotals = Array.from({ length: 24 }, (_, h) => s.heat.reduce((a, row) => a + row[h], 0));
+    const peakH = hourTotals.indexOf(Math.max(...hourTotals));
+    const facts = [
+      ['Longest streak', `${fmtN(s.streak)} days`, s.streakEnd != null ? 'ended ' + fmtDn(s.streakEnd) : ''],
+      ['Biggest day', s.busiest ? fmtH(s.busiest.ms) : '—', s.busiest ? fmtDn(s.busiest.dn) : ''],
+      ['On a listening day', fmtH(s.days ? s.ms / s.days : 0), 'on average'],
+      ['Busiest hour', hourName(peakH), 'across every day'],
+      ['Songs skipped', pct(s.skipRate), s.skipRate == null ? 'needs extended history' : 'of plays']
+    ];
+    $('facts').innerHTML = facts.map(([t, v, sm]) => `<div><dt>${t}</dt><dd class="num">${esc(v)}${sm ? `<small>${esc(sm)}</small>` : ''}</dd></div>`).join('');
+  }
+
+  function renderTop(s) {
+    document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tab === state.tab));
+    document.querySelectorAll('[data-sort]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sort === state.sort));
+    const key = state.sort;
+    const list = state.tab === 'artists' ? s.topArtists : state.tab === 'tracks' ? s.topTracks : s.topAlbums;
+    const rows = [...list].sort((a, b) => b[key] - a[key] || b.ms - a.ms).slice(0, 50);
+    const max = rows.length ? rows[0][key] || 1 : 1;
+    $('topList').innerHTML = rows.length ? rows.map((r, i) =>
+      `<li><button class="row" type="button" data-artist="${esc(r.artist)}" style="--w:${(r[key] / max * 100).toFixed(1)}%">
+        <span class="rank-n">${i + 1}</span>
+        <span class="who"><span class="nm">${esc(r.name)}</span>${r.sub ? `<span class="sub">${esc(r.sub)}</span>` : ''}</span>
+        <span class="val">${key === 'ms' ? fmtH(r.ms) : fmtN(r.plays) + ' plays'}</span></button></li>`).join('')
+      : `<li class="empty">${state.tab === 'albums' ? 'Album names only come with the extended history export.' : 'Nothing here for this period.'}</li>`;
+  }
+
+  function renderHeat(s) {
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    const dayName = d => new Date(2023, 0, 1 + d).toLocaleDateString(undefined, { weekday: 'short' });
+    let max = 0;
+    s.heat.forEach(row => row.forEach(v => { if (v > max) max = v; }));
+    let html = '<span></span>';
+    for (let h = 0; h < 24; h++) html += `<span class="hl">${h % 3 === 0 ? esc(hourName(h).replace(/\s/g, '')) : ''}</span>`;
+    for (const d of order) {
+      html += `<span class="dl">${esc(dayName(d))}</span>`;
+      for (let h = 0; h < 24; h++) {
+        const v = s.heat[d][h];
+        const p = max ? Math.round(Math.sqrt(v / max) * 100) : 0;
+        html += `<span class="c" title="${esc(dayName(d) + ' ' + hourName(h) + ': ' + fmtH(v))}" style="background:color-mix(in srgb, var(--accent) ${p}%, var(--surface-2))"></span>`;
+      }
+    }
+    $('heat').innerHTML = html;
+    let best = { d: 0, h: 0, v: -1 };
+    for (const d of order) for (let h = 0; h < 24; h++) if (s.heat[d][h] > best.v) best = { d, h, v: s.heat[d][h] };
+    const weekday = order.slice(0, 5).reduce((a, d) => a + s.heat[d].reduce((x, y) => x + y, 0), 0) / 5;
+    const weekend = [6, 0].reduce((a, d) => a + s.heat[d].reduce((x, y) => x + y, 0), 0) / 2;
+    $('peak').textContent = best.v > 0
+      ? `Your busiest hour is ${dayName(best.d)} at ${hourName(best.h)}. ` + (() => {
+          const r = weekday ? weekend / weekday : 1;
+          if (r > 1.05) return `A weekend day gets about ${Math.round((r - 1) * 100)}% more listening than a weekday.`;
+          if (r < 0.95) return `A weekday gets about ${Math.round((1 / r - 1) * 100)}% more listening than a weekend day.`;
+          return 'Weekends and weekdays get about the same amount of listening.';
+        })()
+      : '';
+  }
+
+  function meters(title, rows, fmt, color) {
+    if (!rows.length) return '';
+    const max = rows[0][1] || 1;
+    return `<h3>${title}</h3>` + rows.map(([k, v]) =>
+      `<div class="meter"><span title="${esc(fmt(k))}">${esc(fmt(k))}</span><span class="t"><i style="width:${(v / max * 100).toFixed(1)}%;${color ? 'background:' + color : ''}"></i></span><span class="v">${fmtH(v)}</span></div>`).join('');
+  }
+
+  function renderHabits(s) {
+    const rich = s.rich > 0;
+    $('habitsNote').hidden = rich;
+    $('habits').innerHTML = rich ? [
+      ['Skipped', pct(s.skipRate)], ['On shuffle', pct(s.shuffleRate)], ['Played offline', pct(s.offlineRate)]
+    ].map(([t, v]) => `<div><dt>${t}</dt><dd class="num">${v}</dd></div>`).join('') : '';
+    $('platforms').innerHTML = meters('Devices', s.platforms.slice(0, 8), x => x);
+    $('countries').innerHTML = s.countries.length > 1 ? meters('Countries', s.countries.slice(0, 6), country, tok('--c4')) : '';
+    $('shows').innerHTML = s.shows.length ? meters(`Podcasts (${fmtH(s.podMs)} total)`, s.shows.slice(0, 8), x => x, tok('--c3')) : '';
+  }
+
+  function renderYearTable(hist) {
+    const max = Math.max(...hist.yearList.map(y => y.ms)) || 1;
+    $('yearTable').innerHTML = `<thead><tr><th scope="col">Year</th><th scope="col" class="h">Hours</th><th scope="col">Top artist</th><th scope="col">Top song</th><th scope="col">New artists</th></tr></thead><tbody>` +
+      hist.yearList.slice().reverse().map(y => `<tr class="${y.y === state.year ? 'on' : ''}">
+        <td class="y"><button type="button" data-year="${y.y}" aria-pressed="${y.y === state.year}">${y.y}</button></td>
+        <td class="h"><div class="hb"><i style="width:${(y.ms / max * 100).toFixed(1)}%"></i><span>${fmtH(y.ms)}</span></div></td>
+        <td><button class="row" type="button" data-artist="${esc(y.topArtist)}" style="--w:0%;padding:0;display:block">${esc(y.topArtist)}<span class="s">${fmtH(y.topArtistMs)}</span></button></td>
+        <td>${esc(y.topTrack)}<span class="s">${esc(y.topTrackArtist)}</span></td>
+        <td class="num">${fmtN(y.newArtists)}<span class="s">of ${fmtN(y.artists)} played</span></td></tr>`).join('') + '</tbody>';
+  }
+
+  function renderTrajectories(hist) {
+    const color = artistColors(hist);
+    makeChart('traj', {
+      type: 'line',
+      data: {
+        labels: hist.years,
+        datasets: hist.trajectories.map((t, i) => ({
+          label: t.name, data: t.data.map(v => +(v / 36e5).toFixed(1)),
+          borderColor: color[t.name], backgroundColor: color[t.name], tension: .3, pointRadius: 3, pointHoverRadius: 6, borderWidth: 2.5
+        }))
+      },
+      options: {
+        maintainAspectRatio: false, responsive: true, interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true } },
+          tooltip: { itemSort: (a, b) => b.raw - a.raw, callbacks: { label: c => `${c.dataset.label}: ${c.raw} h` } }
+        },
+        scales: { y: { beginAtZero: true, ticks: { callback: v => v + ' h' } }, x: { grid: { display: false } } }
+      }
+    });
+  }
+
+  function openArtist(name) {
+    const a = Core.artistDetail(state.records, name, state.minMs);
+    if (!a) return;
+    $('dlgTitle').textContent = a.name;
+    $('dlgLede').textContent = `${fmtH(a.ms)} across ${fmtN(a.plays)} plays of ${fmtN(a.trackCount)} songs. First heard ${fmtDate(a.first)} with “${a.firstTrack}”; last played ${fmtDate(a.last)}.`;
+    $('dlgCaption').textContent = a.peak ? `Peak month: ${monthName(a.peak.y, a.peak.m, 'long')}, ${fmtH(a.peak.ms)}.` : '';
+    const max = a.tracks.length ? a.tracks[0].ms : 1;
+    $('dlgList').innerHTML = a.tracks.map((t, i) =>
+      `<li><div class="row" style="--w:${(t.ms / max * 100).toFixed(1)}%;cursor:default"><span class="rank-n">${i + 1}</span><span class="who"><span class="nm">${esc(t.name)}</span><span class="sub">${fmtN(t.plays)} plays</span></span><span class="val">${fmtH(t.ms)}</span></div></li>`).join('');
+    const dlg = $('dlg');
+    if (!dlg.open) dlg.showModal();
+    if (themeCharts()) {
+      makeChart('dlgChart', {
+        type: 'bar',
+        data: { labels: a.series.map(m => monthName(m.y, m.m)),
+          datasets: [{ data: a.series.map(m => +(m.ms / 36e5).toFixed(2)), backgroundColor: tok('--accent'), borderRadius: 2, barPercentage: 1, categoryPercentage: .86 }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmtH(a.series[c.dataIndex].ms) } } },
+          scales: { x: { grid: { display: false }, ticks: { autoSkip: true, maxRotation: 0, maxTicksLimit: 8 } },
+            y: { beginAtZero: true, ticks: { callback: v => v + ' h', maxTicksLimit: 4 } } } }
+      });
+    }
+  }
+
+  const relTime = ms => {
+    const m = Math.round((Date.now() - ms) / 6e4);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 60 * 24) return Math.round(m / 60) + ' h ago';
+    return 'on ' + fmtDate(ms);
+  };
+  let lastVersion = null;
+
+  function renderSync(st) {
+    const el = $('sync');
+    el.hidden = false;
+    const info = $('syncInfo');
+    info.hidden = true;
+    $('intakeConnect').hidden = !(st.configured && (!st.connected || st.needs_reconnect));
+    if (!st.configured) {
+      el.innerHTML = '<span class="sync-msg">Spotify sync isn\'t set up on the server</span>';
+      return;
+    }
+    if (!st.connected || st.needs_reconnect) {
+      el.innerHTML = `<a class="btn primary" href="auth/login">${st.needs_reconnect ? 'Reconnect Spotify' : 'Connect Spotify'}</a>`;
+      if (st.needs_reconnect) { info.hidden = false; info.textContent = 'Spotify ended the connection, which it does six months after you sign in. Reconnect to keep recording new plays.'; }
+      return;
+    }
+    const soon = st.reconnect_by && st.reconnect_by * 1000 - Date.now() < 14 * DAY;
+    const msg = st.last_error ? 'Sync problem' : 'Synced ' + (st.last_sync ? relTime(st.last_sync * 1000) : 'not yet');
+    el.innerHTML = `<span class="sync-msg${st.last_error ? ' err' : ''}"><i class="dot${st.last_error ? ' bad' : ''}"></i>${esc(msg)}</span>`
+      + (soon ? '<a class="btn" href="auth/login">Reconnect</a>' : '<button class="btn" type="button" id="syncNow">Sync now</button>');
+    const parts = [`Spotify sync is on${st.name ? ' for ' + st.name : ''}, checking every ${st.poll_minutes} minutes.`];
+    if (st.synced) parts.push(`${fmtN(st.synced)} plays recorded from Spotify${st.first_synced_play ? ' since ' + fmtDate(st.first_synced_play) : ''}.`);
+    if (st.last_error) parts.push(st.last_error);
+    if (st.gaps && st.gaps.length) {
+      const g = st.gaps[st.gaps.length - 1];
+      parts.push(`Some plays between ${fmtDate(g[0])} and ${fmtDate(g[1])} may be missing, because Spotify only keeps your last 50. Your next export will fill them in.`);
+    }
+    if (st.reconnect_by) parts.push(`Spotify requires signing in again by ${fmtDate(st.reconnect_by * 1000)}.`);
+    info.hidden = false;
+    info.textContent = parts.join(' ');
+  }
+
+  async function refreshStatus(reloadIfChanged) {
+    if (!API) return null;
+    let st;
+    try { st = await api('api/status'); }
+    catch (e) {
+      $('sync').hidden = false;
+      $('sync').innerHTML = '<span class="sync-msg err"><i class="dot bad"></i>Can\'t reach the server</span>';
+      return null;
+    }
+    renderSync(st);
+    if (reloadIfChanged && lastVersion !== null && st.version !== lastVersion) {
+      try {
+        state.records = await loadServerRecords();
+        state.hist = null;
+        if (state.records.length) { showDash(); render(); }
+      } catch (e) {}
+    }
+    lastVersion = st.version;
+    return st;
+  }
+
+  function setYear(y) {
+    state.year = (y === '' || y == null) ? null : +y;
+    render();
+  }
+
+  /* ---------- events ---------- */
+  const input = $('fileInput');
+  $('pickBtn').addEventListener('click', () => input.click());
+  $('addBtn').addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { ingest(input.files); input.value = ''; });
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => ingest(e.dataTransfer.files));
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => { if (!drop.contains(e.target)) { e.preventDefault(); ingest(e.dataTransfer.files); } });
+
+  document.addEventListener('click', e => {
+    const yb = e.target.closest('[data-year]');
+    if (yb) { setYear(yb.dataset.year); return; }
+    const tb = e.target.closest('[data-tab]');
+    if (tb) { state.tab = tb.dataset.tab; render(); return; }
+    const sb = e.target.closest('[data-sort]');
+    if (sb) { state.sort = sb.dataset.sort; render(); return; }
+    const sn = e.target.closest('#syncNow');
+    if (sn) {
+      sn.disabled = true; sn.textContent = 'Syncing…';
+      api('api/sync', { method: 'POST' }).catch(() => {}).then(() => refreshStatus(true));
+      return;
+    }
+    const ab = e.target.closest('[data-artist]');
+    if (ab && !ab.closest('dialog')) openArtist(ab.dataset.artist);
+  });
+  $('minMs').addEventListener('change', e => {
+    state.minMs = +e.target.value;
+    try { localStorage.setItem('ln-minMs', String(state.minMs)); } catch (err) {}
+    render();
+  });
+  $('dlgClose').addEventListener('click', () => $('dlg').close());
+  $('dlg').addEventListener('click', e => { if (e.target === $('dlg')) $('dlg').close(); });
+  $('clearBtn').addEventListener('click', async () => {
+    if (API) {
+      if (!confirm('Remove all listening history from your server? Spotify stays connected, and you can add the export again any time.')) return;
+      try { await api('api/records', { method: 'DELETE' }); } catch (e) { alert(e.message); return; }
+    } else {
+      if (!confirm('Remove your listening history from this browser? You can add the files again any time.')) return;
+      await DB.del('records');
+    }
+    state.records = null; state.hist = null; state.year = null;
+    setStatus('');
+    showIntake();
+  });
+
+  const rerender = () => { if (state.records && !$('dash').hidden) render(); };
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rerender); } catch (e) {}
+  new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  /* ---------- start ---------- */
+  (async () => {
+    if (typeof Chart === 'undefined') setStatus('The chart library didn\'t load, so charts will be missing. Reload the page to try again.', true);
+    if (API) {
+      $('clearBtn').textContent = 'Remove history from the server';
+      if (/[?&]spotify=/.test(location.search)) history.replaceState(null, '', location.pathname);
+      await refreshStatus(false);
+      let recs = null;
+      try { recs = await loadServerRecords(); } catch (e) { setStatus(e.message, true); }
+      if (recs && recs.length) { state.records = recs; showDash(); render(); }
+      else showIntake();
+      setInterval(() => refreshStatus(true), 120000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshStatus(true); });
+      return;
+    }
+    const saved = await DB.get('records');
+    if (Array.isArray(saved) && saved.length) { state.records = saved; showDash(); render(); }
+    else showIntake();
+  })();
+})();
+</script>
+</body>
+</html>
