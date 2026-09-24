@@ -166,6 +166,14 @@ dialog::backdrop{background:rgba(15,17,30,.55)}
 .dlg .chart{position:relative;height:200px;margin:20px 0 8px}
 .close{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
 
+/* loading */
+.loading{min-height:calc(100vh - 80px);display:flex;flex-direction:column;justify-content:center;padding-top:48px;padding-bottom:48px}
+.loading-title{font-family:var(--display);font-weight:700;font-size:clamp(1.4rem,3vw,2rem);margin:0 0 18px}
+.loading-bar{width:min(420px,100%);height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.loading-bar i{display:block;width:35%;height:100%;border-radius:3px;background:var(--accent);animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
+.loading-note{color:var(--muted);margin:16px 0 0}
+
 /* spotify sync */
 .sync{display:flex;gap:8px;align-items:center}
 .sync-msg{font-size:.875rem;color:var(--muted);display:flex;align-items:center;gap:7px;white-space:nowrap}
@@ -175,7 +183,8 @@ dialog::backdrop{background:rgba(15,17,30,.55)}
 a.btn{text-decoration:none;display:inline-block;white-space:nowrap}
 .user-nav{display:flex;gap:14px;align-items:center;font-size:.875rem;margin-left:auto}
 .user-nav a{color:var(--muted);text-decoration:none;white-space:nowrap}
-.user-nav a:hover{color:var(--ink)}
+.user-nav a:hover,.user-nav .linklike:hover{color:var(--ink)}
+.user-nav .linklike{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font:inherit;white-space:nowrap}
 .connect-alt{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
 .connect-alt p{margin:0 0 12px;color:var(--muted)}
 .sync-info{margin:0;max-width:70ch}
@@ -207,7 +216,13 @@ a.btn{text-decoration:none;display:inline-block;white-space:nowrap}
 
 <main>
   <!-- Intake -->
-  <div class="wrap intake" id="intake">
+  <div class="wrap loading" id="loading" role="status" aria-live="polite">
+    <p class="loading-title">Loading your listening history…</p>
+    <div class="loading-bar" aria-hidden="true"><i></i></div>
+    <p class="loading-note" id="loadingNote" hidden>The first load on this device takes a moment. After that it opens right away.</p>
+  </div>
+
+  <div class="wrap intake" id="intake" hidden>
     <div class="intake-grid">
       <div>
         <h1>Every year of your Spotify listening, in one place</h1>
@@ -552,9 +567,21 @@ if (typeof module !== 'undefined') module.exports = Core;
     }
     return r.json();
   }
-  async function loadServerRecords() {
-    const rows = await api('api/records');
-    return Core.merge([], rows.map(fromRow));
+  // This browser keeps a copy of the person's history so the dashboard opens instantly,
+  // then asks the server only for plays added since. `reset` changes when history is deleted.
+  const CACHE_KEY = 'server-cache';
+  let copy = { user: null, reset: null, version: null, maxId: 0 };
+
+  async function pullRecords(st) {
+    const same = state.records && copy.user === st.user.email && copy.reset === st.reset;
+    if (same && copy.version === st.version) return false;
+    const res = await api('api/records' + (same ? '?after=' + copy.maxId : ''));
+    const incoming = res.rows.map(fromRow);
+    state.records = same ? Core.merge(state.records, incoming) : Core.merge([], incoming);
+    state.hist = null;
+    copy = { user: st.user.email, reset: res.reset, version: res.version, maxId: same ? Math.max(copy.maxId, res.max_id) : res.max_id };
+    DB.set(CACHE_KEY, Object.assign({ records: state.records, savedAt: Date.now() }, copy));
+    return true;
   }
 
   try { const v = localStorage.getItem('ln-minMs'); if (v !== null) state.minMs = +v; } catch (e) {}
@@ -668,12 +695,9 @@ if (typeof module !== 'undefined') module.exports = Core;
           await api('api/records', { method: 'POST', body: JSON.stringify({ rows: found.slice(i, i + 20000).map(toRow) }) });
         }
         setStatus('Building your charts…');
-        state.records = await loadServerRecords();
-        state.hist = null;
+        await refreshStatus(true);
         setStatus(badNote.trim());
-        showDash();
-        render();
-        refreshStatus(false);
+        if (state.records && state.records.length) { showDash(); render(); }
         return;
       }
       setStatus('Building your charts…');
@@ -689,8 +713,8 @@ if (typeof module !== 'undefined') module.exports = Core;
   }
 
   /* ---------- screens ---------- */
-  function showIntake() { $('intake').hidden = false; $('dash').hidden = true; $('years').hidden = true; $('tools').hidden = true; }
-  function showDash() { $('intake').hidden = true; $('dash').hidden = false; $('years').hidden = false; $('tools').hidden = false; }
+  function showIntake() { $('loading').hidden = true; $('intake').hidden = false; $('dash').hidden = true; $('years').hidden = true; $('tools').hidden = true; }
+  function showDash() { $('loading').hidden = true; $('intake').hidden = true; $('dash').hidden = false; $('years').hidden = false; $('tools').hidden = false; }
 
   /* ---------- rendering ---------- */
   function themeCharts() {
@@ -944,7 +968,6 @@ if (typeof module !== 'undefined') module.exports = Core;
     if (m < 60 * 24) return Math.round(m / 60) + ' h ago';
     return 'on ' + fmtDate(ms);
   };
-  let lastVersion = null;
 
   function renderSync(st) {
     const el = $('sync');
@@ -992,16 +1015,14 @@ if (typeof module !== 'undefined') module.exports = Core;
     if (st.user) {
       const nav = $('userNav');
       nav.hidden = false;
-      nav.innerHTML = `<a href="account">${esc(st.user.name || 'Account')}</a>` + (st.user.is_admin ? '<a href="admin">Admin</a>' : '');
+      nav.innerHTML = `<a href="account">${esc(st.user.name || 'Account')}</a>` + (st.user.is_admin ? '<a href="admin">Admin</a>' : '')
+        + '<button type="button" class="linklike" id="signOut">Sign out</button>';
     }
-    if (reloadIfChanged && lastVersion !== null && st.version !== lastVersion) {
+    if (reloadIfChanged && st.user) {
       try {
-        state.records = await loadServerRecords();
-        state.hist = null;
-        if (state.records.length) { showDash(); render(); }
+        if (await pullRecords(st) && state.records.length) { showDash(); render(); }
       } catch (e) {}
     }
-    lastVersion = st.version;
     return st;
   }
 
@@ -1035,6 +1056,10 @@ if (typeof module !== 'undefined') module.exports = Core;
       api('api/sync', { method: 'POST' }).catch(() => {}).then(() => refreshStatus(true));
       return;
     }
+    if (e.target.closest('#signOut')) {
+      DB.del(CACHE_KEY).finally(() => api('api/logout', { method: 'POST' }).catch(() => {}).then(() => { location.href = '/login'; }));
+      return;
+    }
     const ab = e.target.closest('[data-artist]');
     if (ab && !ab.closest('dialog')) openArtist(ab.dataset.artist);
   });
@@ -1049,6 +1074,8 @@ if (typeof module !== 'undefined') module.exports = Core;
     if (API) {
       if (!confirm('Remove all listening history from your server? Spotify stays connected, and you can add the export again any time.')) return;
       try { await api('api/records', { method: 'DELETE' }); } catch (e) { alert(e.message); return; }
+      await DB.del(CACHE_KEY);
+      copy = { user: null, reset: null, version: null, maxId: 0 };
     } else {
       if (!confirm('Remove your listening history from this browser? You can add the files again any time.')) return;
       await DB.del('records');
@@ -1068,11 +1095,25 @@ if (typeof module !== 'undefined') module.exports = Core;
     if (API) {
       $('clearBtn').textContent = 'Remove history from the server';
       if (/[?&]spotify=/.test(location.search)) history.replaceState(null, '', location.pathname);
-      await refreshStatus(false);
-      let recs = null;
-      try { recs = await loadServerRecords(); } catch (e) { setStatus(e.message, true); }
-      if (recs && recs.length) { state.records = recs; showDash(); render(); }
-      else showIntake();
+      const slow = setTimeout(() => { $('loadingNote').hidden = false; }, 2500);
+      const [st, cached] = await Promise.all([refreshStatus(false), DB.get(CACHE_KEY)]);
+      if (cached && Array.isArray(cached.records) && cached.records.length) {
+        if (!st || (st.user && cached.user === st.user.email && cached.reset === st.reset)) {
+          // Show this browser's copy right away (also works if the server is briefly unreachable).
+          state.records = cached.records;
+          copy = { user: cached.user, reset: cached.reset, version: cached.version, maxId: cached.maxId || 0 };
+          showDash(); render();
+        } else {
+          await DB.del(CACHE_KEY);  // someone else's copy, or history was deleted
+        }
+      }
+      if (st && st.user) {
+        try {
+          if (await pullRecords(st) && state.records.length) { showDash(); render(); }
+        } catch (e) { if (!state.records) setStatus(e.message, true); }
+      }
+      clearTimeout(slow);
+      if (!state.records || !state.records.length) showIntake();
       setInterval(() => refreshStatus(true), 120000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshStatus(true); });
       return;

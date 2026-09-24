@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS users(
   last_weekly TEXT,
   last_monthly TEXT,
   unsub_token TEXT NOT NULL,
-  data_version INTEGER NOT NULL DEFAULT 0
+  data_version INTEGER NOT NULL DEFAULT 0,
+  data_reset INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS sessions(
   token_hash TEXT PRIMARY KEY,
@@ -101,6 +102,9 @@ def init() -> None:
             con.execute("ALTER TABLE plays RENAME TO plays_legacy")
             con.execute("DROP INDEX IF EXISTS plays_t")
         con.executescript(SCHEMA)
+        ucols = [r[1] for r in con.execute("PRAGMA table_info(users)")]
+        if "data_reset" not in ucols:
+            con.execute("ALTER TABLE users ADD COLUMN data_reset INTEGER NOT NULL DEFAULT 0")
         con.commit()
 
 

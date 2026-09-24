@@ -356,7 +356,7 @@ def status(request: Request):
     user = auth.require_user(request)
     st = spotify.status(user["id"])
     total = db.q1("SELECT COUNT(*) FROM plays WHERE user_id=?", (user["id"],))[0]
-    st.update(total=total, version=user["data_version"],
+    st.update(total=total, version=user["data_version"], reset=user["data_reset"],
               user={"name": user["name"], "email": user["email"], "is_admin": bool(user["is_admin"])})
     return st
 
@@ -368,11 +368,20 @@ async def sync_now(request: Request):
 
 
 @app.get("/api/records")
-def get_records(request: Request):
-    user = auth.require_user(request)
-    with_cols = ",".join(db.COLS)
-    rows = db.q(f"SELECT {with_cols} FROM plays WHERE user_id=? ORDER BY t", (user["id"],))
-    payload = json.dumps([tuple(r) for r in rows], separators=(",", ":"), ensure_ascii=False)
+def get_records(request: Request, after: int = 0):
+    """All of this person's plays, or only those added since `after` (a row id from an earlier response).
+    Browsers keep a copy and use `after` to fetch just what's new; `reset` changes when history is
+    deleted, which tells them to throw their copy away."""
+    user = auth.require_user(request)  # read before the rows, so a sync mid-request is caught next time
+    cols = ",".join(db.COLS)
+    rows = db.q(f"SELECT rowid AS id, {cols} FROM plays WHERE user_id=? AND rowid>? ORDER BY rowid",
+                (user["id"], max(0, after)))
+    payload = json.dumps({
+        "rows": [tuple(r)[1:] for r in rows],
+        "max_id": rows[-1]["id"] if rows else max(0, after),
+        "version": user["data_version"],
+        "reset": user["data_reset"],
+    }, separators=(",", ":"), ensure_ascii=False)
     return Response(payload, media_type="application/json", headers={"Cache-Control": "no-store"})
 
 
@@ -390,7 +399,7 @@ def delete_records(request: Request):
     user = auth.require_user(request)
     db.run("DELETE FROM plays WHERE user_id=?", (user["id"],))
     db.run("UPDATE spotify SET api_newest=0, gaps='[]' WHERE user_id=?", (user["id"],))
-    db.run("UPDATE users SET data_version=data_version+1 WHERE id=?", (user["id"],))
+    db.run("UPDATE users SET data_version=data_version+1, data_reset=data_reset+1 WHERE id=?", (user["id"],))
     return {"ok": True}
 
 

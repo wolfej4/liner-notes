@@ -96,3 +96,16 @@
     }
   });
 })();
+
+// Signing out from any page also forgets the dashboard's copy of the history in this browser.
+document.addEventListener('click', e => {
+  if (e.target.closest('button[data-post="/api/logout"]')) {
+    try {
+      const req = indexedDB.open('liner-notes', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('kv');
+      req.onsuccess = () => {
+        try { req.result.transaction('kv', 'readwrite').objectStore('kv').delete('server-cache'); } catch (err) {}
+      };
+    } catch (err) {}
+  }
+}, true);
