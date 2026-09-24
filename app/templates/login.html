@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% if note %}<p class="notice">{{ note }}</p>{% endif %}
 <h1>Sign in</h1>
 <p class="lede">Your listening history, from your first stream to today.</p>
 {% if error %}<p class="notice bad">{{ error }}</p>{% endif %}

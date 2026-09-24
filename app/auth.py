@@ -68,9 +68,16 @@ def create_session(user_id: int) -> str:
     return token
 
 
-def set_session_cookie(response, token: str) -> None:
+def request_is_https(request: Request) -> bool:
+    # Behind Pangolin/Traefik, uvicorn's --proxy-headers turns X-Forwarded-Proto into the request scheme.
+    return request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https"
+
+
+def set_session_cookie(response, token: str, request: Request) -> None:
+    # A Secure cookie is dropped by browsers on plain-http pages (like a LAN IP), which would loop back to
+    # the sign-in page, so only mark it Secure when the page itself is https.
     response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_DAYS * 86400, httponly=True, samesite="lax",
-                        secure=config.secure_cookies(), path="/")
+                        secure=request_is_https(request), path="/")
 
 
 def end_session(request: Request) -> None:

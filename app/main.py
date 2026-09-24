@@ -80,11 +80,21 @@ def message(request: Request, heading: str, text: str, status_code: int = 200, *
     return page("message.html", request, status_code=status_code, title=heading, heading=heading, message=text, **ctx)
 
 
-def signed_in(user_id: int, redirect: str = "/", as_json: bool = True):
+def signed_in(request: Request, user_id: int, redirect: str = "/", as_json: bool = True):
     token = auth.create_session(user_id)
     resp = JSONResponse({"redirect": redirect}) if as_json else RedirectResponse(redirect, status_code=303)
-    auth.set_session_cookie(resp, token)
+    auth.set_session_cookie(resp, token, request)
     return resp
+
+
+def address_note(request: Request) -> str | None:
+    """Explain when someone opens Liner Notes somewhere other than its public address."""
+    host = (request.headers.get("host") or "").lower()
+    public = config.public_host()
+    if not host or not public or host == public:
+        return None
+    return (f"You're using Liner Notes at {host}. Its public address is {config.get('public_url')}; "
+            "Spotify and single sign-on always return there, so sign in there to avoid signing in twice.")
 
 
 async def body(request: Request) -> dict:
@@ -139,7 +149,8 @@ def setup_page(request: Request):
     if auth.user_count() > 0:
         return RedirectResponse("/login", status_code=303)
     legacy = db.q1("SELECT 1 FROM sqlite_master WHERE type='table' AND name='plays_legacy'") is not None
-    return page("setup.html", request, title="Set up", legacy=legacy, min_password=auth.MIN_PASSWORD)
+    return page("setup.html", request, title="Set up", legacy=legacy, min_password=auth.MIN_PASSWORD,
+                note=address_note(request))
 
 
 @app.post("/api/setup")
@@ -152,7 +163,7 @@ async def setup(request: Request):
     uid = auth.create_user(email, data.get("name", ""), password, is_admin=True)
     db.adopt_legacy(uid)
     log.info("admin account created for %s", email)
-    return signed_in(uid, "/admin")
+    return signed_in(request, uid, "/admin")
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -161,7 +172,7 @@ def login_page(request: Request, error: str | None = None):
         return RedirectResponse("/setup", status_code=303)
     if auth.current_user(request):
         return RedirectResponse("/", status_code=303)
-    return page("login.html", request, title="Sign in", error=error,
+    return page("login.html", request, title="Sign in", error=error, note=address_note(request),
                 signup_open=config.get("signup_mode") == "open", **oidc_ctx())
 
 
@@ -179,7 +190,7 @@ async def login(request: Request):
         raise HTTPException(400, "That email and password don't match.")
     if row["disabled"]:
         raise HTTPException(403, "This account is disabled. Ask the admin to turn it back on.")
-    return signed_in(row["id"])
+    return signed_in(request, row["id"])
 
 
 @app.post("/api/logout")
@@ -205,7 +216,7 @@ async def signup(request: Request):
     data = await body(request)
     uid = auth.create_user(auth.clean_email(data.get("email")), data.get("name", ""),
                            auth.check_password_rules(data.get("password")))
-    return signed_in(uid)
+    return signed_in(request, uid)
 
 
 @app.get("/invite/{token}", response_class=HTMLResponse)
@@ -231,7 +242,7 @@ async def accept_invite(request: Request, token: str):
     uid = auth.create_user(inv["email"], data.get("name", ""), auth.check_password_rules(data.get("password")),
                            is_admin=bool(inv["is_admin"]))
     auth.use_token(inv["token_hash"])
-    return signed_in(uid)
+    return signed_in(request, uid)
 
 
 @app.get("/reset/{token}", response_class=HTMLResponse)
@@ -255,7 +266,7 @@ async def reset(request: Request, token: str):
     db.run("UPDATE users SET password_hash=? WHERE id=?", (auth.hash_password(password), tok["user_id"]))
     db.run("DELETE FROM sessions WHERE user_id=?", (tok["user_id"],))
     auth.use_token(tok["token_hash"])
-    return signed_in(tok["user_id"])
+    return signed_in(request, tok["user_id"])
 
 
 # ---------------------------------------------------------------- single sign-on
@@ -300,13 +311,13 @@ async def oidc_callback(request: Request, code: str | None = None, state: str | 
                                    oidc_sub=info["sub"])
             if inv:
                 auth.use_token(inv["token_hash"])
-            return signed_in(uid, as_json=False)
+            return signed_in(request, uid, as_json=False)
         who = info["email"] or "that account"
         return message(request, "No account yet", f"There's no Liner Notes account for {who}. "
                        "Ask the admin for an invite.", status_code=403, **back)
     if row["disabled"]:
         return message(request, "Account disabled", "Ask the admin to turn it back on.", status_code=403, **back)
-    return signed_in(row["id"], as_json=False)
+    return signed_in(request, row["id"], as_json=False)
 
 
 # ---------------------------------------------------------------- Spotify connection

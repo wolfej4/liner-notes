@@ -166,6 +166,34 @@ dialog::backdrop{background:rgba(15,17,30,.55)}
 .dlg .chart{position:relative;height:200px;margin:20px 0 8px}
 .close{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
 
+/* period picker */
+.period{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 18px}
+.period > label{color:var(--muted)}
+.period select,.period input[type=date]{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--ink)}
+.period-custom{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px}
+.period-custom > span{color:var(--muted)}
+.period-dates{color:var(--muted);font-size:.9rem}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* recent plays */
+.recent-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 24px;flex-wrap:wrap}
+.recent-head .intro{margin-bottom:12px}
+#recentFilter{width:min(340px,100%);margin-bottom:12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.day-h{font-weight:700;font-size:.9rem;color:var(--muted);margin:18px 0 2px;padding:0 4px 6px;border-bottom:1px solid var(--line)}
+.day-h:first-child{margin-top:4px}
+ol.plays{list-style:none;margin:0;padding:0}
+.play{display:grid;grid-template-columns:5.5em minmax(0,1.3fr) minmax(0,1fr) 8.5em;gap:14px;align-items:center;width:100%;
+  text-align:left;background:none;border:0;padding:8px 4px;border-radius:6px;color:inherit}
+button.play{cursor:pointer}
+button.play:hover{background:var(--surface)}
+.pt,.pal,.plen{color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums}
+.pal{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plen{text-align:right;white-space:nowrap}
+.ptag{display:inline-block;font-size:.75rem;border:1px solid var(--line);border-radius:999px;padding:0 7px;margin-left:6px;color:var(--muted);vertical-align:1px}
+.play.short .nm{font-weight:400;color:var(--muted)}
+#recentMore{margin-top:14px}
+@media (max-width:640px){.play{grid-template-columns:4.6em minmax(0,1fr) auto;gap:10px}.pal{display:none}}
+
 /* loading */
 .loading{min-height:calc(100vh - 80px);display:flex;flex-direction:column;justify-content:center;padding-top:48px;padding-bottom:48px}
 .loading-title{font-family:var(--display);font-weight:700;font-size:clamp(1.4rem,3vw,2rem);margin:0 0 18px}
@@ -252,6 +280,17 @@ a.btn{text-decoration:none;display:inline-block;white-space:nowrap}
   <div id="dash" hidden>
     <div class="wrap">
       <div class="hero">
+        <div class="period">
+          <label for="periodSel">Showing</label>
+          <select id="periodSel"></select>
+          <span class="period-custom" id="periodCustom" hidden>
+            <label for="pFrom" class="vh">From</label><input type="date" id="pFrom">
+            <span>to</span>
+            <label for="pTo" class="vh">To</label><input type="date" id="pTo">
+            <button class="btn" type="button" id="pApply">Show</button>
+          </span>
+          <span class="period-dates" id="periodDates"></span>
+        </div>
         <h1 id="headline"></h1>
         <p class="lede" id="lede"></p>
         <p class="notice" id="basicNotice" hidden>These files are the one-year account export. Request <strong>Extended streaming history</strong> from Spotify to see every year, plus skips, shuffle, and devices.</p>
@@ -260,6 +299,18 @@ a.btn{text-decoration:none;display:inline-block;white-space:nowrap}
         <p class="caption">Each bar is a month, colored by the artist you played most that month. Select a bar to open that year.</p>
         <dl class="facts" id="facts"></dl>
       </div>
+
+      <section class="block" aria-labelledby="recentH">
+        <div class="recent-head">
+          <div>
+            <h2 id="recentH">Recently played</h2>
+            <p class="intro" id="recentIntro"></p>
+          </div>
+          <input type="search" id="recentFilter" placeholder="Filter by song, artist, or album" aria-label="Filter these plays">
+        </div>
+        <div id="recentList"></div>
+        <button class="btn" type="button" id="recentMore" hidden>Show more</button>
+      </section>
 
       <div class="split">
         <section class="block" aria-labelledby="topH">
@@ -422,13 +473,13 @@ const Core = (() => {
   const byMs = m => [...m].sort((a, b) => b[1] - a[1]);
 
   // Stats for one year (or all time when year is null).
-  function compute(recs, { year, minMs }) {
+  function compute(recs, { from = -Infinity, to = Infinity, minMs }) {
     const A = new Map(), T = new Map(), L = new Map(), P = new Map(), C = new Map(), S = new Map(), D = new Map();
     const heat = Array.from({ length: 7 }, () => new Array(24).fill(0));
     let ms = 0, plays = 0, rich = 0, skips = 0, shuf = 0, off = 0, podMs = 0, first = null, last = null, n = 0;
     for (const r of recs) {
+      if (r.t < from || r.t >= to) continue;
       const d = new Date(r.t), y = d.getFullYear();
-      if (year != null && y !== year) continue;
       if (r.k === 'p') { podMs += r.ms; S.set(r.ar, (S.get(r.ar) || 0) + r.ms); continue; }
       n++; ms += r.ms;
       const counted = r.ms >= minMs;
@@ -547,7 +598,8 @@ if (typeof module !== 'undefined') module.exports = Core;
 (() => {
   const $ = id => document.getElementById(id);
   const DAY = Core.DAY;
-  const state = { records: null, year: null, tab: 'artists', sort: 'ms', minMs: 30000, hist: null, histKey: '' };
+  const state = { records: null, year: null, period: { kind: 'all' }, range: null, tab: 'artists', sort: 'ms', minMs: 30000,
+    hist: null, histKey: '', recentLimit: 15, recentFilter: '' };
   const charts = {};
 
   /* ---------- server mode (when served by the Liner Notes container) ---------- */
@@ -739,11 +791,13 @@ if (typeof module !== 'undefined') module.exports = Core;
     if (!state.records) return;
     const hist = getHist();
     if (!hist) return;
-    if (state.year != null && !hist.years.includes(state.year)) state.year = null;
-    const s = Core.compute(state.records, { year: state.year, minMs: state.minMs });
+    const range = state.range = periodRange(state.period);
+    const s = Core.compute(state.records, { from: range.from, to: range.to, minMs: state.minMs });
     const hasCharts = themeCharts();
     renderYears(hist);
+    renderPeriod(hist, range);
     renderHero(s, hist, hasCharts);
+    renderRecent();
     renderTop(s);
     renderHeat(s);
     renderHabits(s);
@@ -773,17 +827,23 @@ if (typeof module !== 'undefined') module.exports = Core;
   function renderYears(hist) {
     const opts = [{ v: null, l: 'All time' }].concat(hist.years.map(y => ({ v: y, l: String(y) })));
     $('years').innerHTML = opts.map(o =>
-      `<button class="yr" type="button" data-year="${o.v ?? ''}" aria-pressed="${o.v === state.year}">${o.l}</button>`).join('');
+      `<button class="yr" type="button" data-year="${o.v ?? ''}" aria-pressed="${o.v === null ? state.period.kind === 'all' : o.v === state.year}">${o.l}</button>`).join('');
     const on = $('years').querySelector('[aria-pressed="true"]');
     if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   function renderHero(s, hist, hasCharts) {
-    const hours = fmtN(s.ms / 36e5);
-    $('headline').textContent = state.year == null
-      ? `${hours} hours of music since ${monthName(new Date(s.first).getFullYear(), new Date(s.first).getMonth(), 'long')}`
-      : `${hours} hours of music in ${state.year}`;
-    $('lede').textContent = `${fmtN(s.plays)} plays of ${fmtN(s.trackCount)} different songs by ${fmtN(s.artistCount)} artists, on ${fmtN(s.days)} different days.`;
+    const range = state.range;
+    if (state.period.kind === 'all') {
+      $('headline').textContent = `${fmtN(s.ms / 36e5)} hours of music since ${monthName(new Date(s.first).getFullYear(), new Date(s.first).getMonth(), 'long')}`;
+    } else if (!s.n) {
+      $('headline').textContent = `No music ${range.phrase}`;
+    } else {
+      $('headline').textContent = `${hoursPhrase(s.ms)} of music ${range.phrase}`;
+    }
+    $('lede').textContent = s.n
+      ? `${fmtN(s.plays)} plays of ${fmtN(s.trackCount)} different songs by ${fmtN(s.artistCount)} artists, on ${fmtN(s.days)} different days.`
+      : 'Choose another period above, or check back after you\'ve listened.';
 
     const quiet = tok('--quiet');
     const color = artistColors(hist);
@@ -801,7 +861,8 @@ if (typeof module !== 'undefined') module.exports = Core;
             data: ml.map(m => +(m.ms / 36e5).toFixed(2)),
             backgroundColor: ml.map(m => {
               const c = (m.top && color[m.top]) || quiet;
-              return state.year != null && m.y !== state.year ? c + '40' : c;
+              const inRange = new Date(m.y, m.m + 1, 1).getTime() > range.from && new Date(m.y, m.m, 1).getTime() < range.to;
+              return state.period.kind !== 'all' && !inRange ? c + '40' : c;
             }),
             borderRadius: 2, barPercentage: 1, categoryPercentage: .86
           }]
@@ -836,7 +897,7 @@ if (typeof module !== 'undefined') module.exports = Core;
       ['Longest streak', `${fmtN(s.streak)} days`, s.streakEnd != null ? 'ended ' + fmtDn(s.streakEnd) : ''],
       ['Biggest day', s.busiest ? fmtH(s.busiest.ms) : '—', s.busiest ? fmtDn(s.busiest.dn) : ''],
       ['On a listening day', fmtH(s.days ? s.ms / s.days : 0), 'on average'],
-      ['Busiest hour', hourName(peakH), 'across every day'],
+      ['Busiest hour', s.n ? hourName(peakH) : '—', s.n ? 'across every day' : ''],
       ['Songs skipped', pct(s.skipRate), s.skipRate == null ? 'needs extended history' : 'of plays']
     ];
     $('facts').innerHTML = facts.map(([t, v, sm]) => `<div><dt>${t}</dt><dd class="num">${esc(v)}${sm ? `<small>${esc(sm)}</small>` : ''}</dd></div>`).join('');
@@ -896,7 +957,7 @@ if (typeof module !== 'undefined') module.exports = Core;
 
   function renderHabits(s) {
     const rich = s.rich > 0;
-    $('habitsNote').hidden = rich;
+    $('habitsNote').hidden = rich || !s.n;
     $('habits').innerHTML = rich ? [
       ['Skipped', pct(s.skipRate)], ['On shuffle', pct(s.shuffleRate)], ['Played offline', pct(s.offlineRate)]
     ].map(([t, v]) => `<div><dt>${t}</dt><dd class="num">${v}</dd></div>`).join('') : '';
@@ -1026,9 +1087,161 @@ if (typeof module !== 'undefined') module.exports = Core;
     return st;
   }
 
-  function setYear(y) {
-    state.year = (y === '' || y == null) ? null : +y;
+  /* ---------- periods ---------- */
+  const PRESETS = [
+    ['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'], ['90d', 'Last 90 days'],
+    ['12m', 'Last 12 months'], ['thisMonth', 'This month'], ['lastMonth', 'Last month'],
+    ['thisYear', 'This year'], ['lastYear', 'Last year']
+  ];
+  const dayStart = (y, m, d) => new Date(y, m, d).getTime();
+  const isoDay = t => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const parseDay = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? dayStart(+m[1], +m[2] - 1, +m[3]) : null; };
+  const shortDate = (t, withYear) => new Date(t).toLocaleDateString(undefined, withYear ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' });
+  function hoursPhrase(ms) {
+    const h = ms / 36e5;
+    if (h >= 10) return fmtN(h) + ' hours';
+    if (h >= 1) return (Math.round(h * 10) / 10) + (h >= 0.95 && h < 1.05 ? ' hour' : ' hours');
+    const m = Math.round(ms / 6e4);
+    return m + (m === 1 ? ' minute' : ' minutes');
+  }
+  function spanText(from, to) {
+    const last = to - 1, sameYear = new Date(from).getFullYear() === new Date(last).getFullYear();
+    if (isoDay(from) === isoDay(last)) return shortDate(from, true);
+    return `${shortDate(from, !sameYear)} to ${shortDate(last, true)}`;
+  }
+
+  // Turns the chosen period into {from, to} (ms, `to` exclusive), a phrase for headlines, and whether it ends now.
+  function periodRange(p) {
+    const now = new Date(), Y = now.getFullYear(), M = now.getMonth(), D = now.getDate();
+    const tomorrow = dayStart(Y, M, D + 1);
+    if (p.kind === 'year') return { from: dayStart(p.year, 0, 1), to: dayStart(p.year + 1, 0, 1), phrase: `in ${p.year}`, live: p.year === Y };
+    if (p.kind === 'custom') {
+      const from = parseDay(p.from), to = parseDay(p.to) + DAY;
+      return { from, to, phrase: isoDay(from) === isoDay(to - 1) ? `on ${shortDate(from, true)}` : `from ${spanText(from, to)}`, live: to >= tomorrow, dates: spanText(from, to) };
+    }
+    if (p.kind === 'preset') {
+      const days = { '7d': 7, '30d': 30, '90d': 90 }[p.id];
+      if (p.id === 'today') return { from: dayStart(Y, M, D), to: tomorrow, phrase: 'today', live: true, dates: shortDate(Date.now(), true) };
+      if (days) { const from = dayStart(Y, M, D - days + 1); return { from, to: tomorrow, phrase: `in the last ${days} days`, live: true, dates: spanText(from, tomorrow) }; }
+      if (p.id === '12m') { const from = dayStart(Y - 1, M, D + 1); return { from, to: tomorrow, phrase: 'in the last 12 months', live: true, dates: spanText(from, tomorrow) }; }
+      if (p.id === 'thisMonth') { const from = dayStart(Y, M, 1); return { from, to: dayStart(Y, M + 1, 1), phrase: 'this month', live: true, dates: spanText(from, tomorrow) }; }
+      if (p.id === 'lastMonth') { const from = dayStart(Y, M - 1, 1); return { from, to: dayStart(Y, M, 1), phrase: `in ${monthName(new Date(from).getFullYear(), new Date(from).getMonth(), 'long')}`, live: false, dates: spanText(from, dayStart(Y, M, 1)) }; }
+    }
+    return { from: -Infinity, to: Infinity, phrase: '', live: true };
+  }
+
+  function normalizePeriod(p) {
+    const Y = new Date().getFullYear();
+    if (p.kind === 'preset' && p.id === 'thisYear') return { kind: 'year', year: Y };
+    if (p.kind === 'preset' && p.id === 'lastYear') return { kind: 'year', year: Y - 1 };
+    if (p.kind === 'preset' && !PRESETS.some(([id]) => id === p.id)) return { kind: 'all' };
+    if (p.kind === 'custom') {
+      const a = parseDay(p.from), b = parseDay(p.to);
+      if (a == null || b == null) return { kind: 'all' };
+      if (a > b) return { kind: 'custom', from: p.to, to: p.from };
+    }
+    return p;
+  }
+
+  const periodToHash = p => p.kind === 'year' ? String(p.year) : p.kind === 'preset' ? p.id : p.kind === 'custom' ? `${p.from}..${p.to}` : '';
+  function periodFromHash() {
+    const v = decodeURIComponent((/[#&]p=([^&]*)/.exec(location.hash) || [])[1] || '');
+    if (/^\d{4}$/.test(v)) return { kind: 'year', year: +v };
+    const c = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(v);
+    if (c) return normalizePeriod({ kind: 'custom', from: c[1], to: c[2] });
+    if (v) return normalizePeriod({ kind: 'preset', id: v });
+    return { kind: 'all' };
+  }
+
+  function setPeriod(p) {
+    p = normalizePeriod(p);
+    state.period = p;
+    state.year = p.kind === 'year' ? p.year : null;
+    state.recentLimit = 15;
+    const h = periodToHash(p);
+    try { history.replaceState(null, '', location.pathname + location.search + (h ? '#p=' + h : '')); } catch (e) {}
     render();
+  }
+  function setYear(y) { setPeriod(y === '' || y == null ? { kind: 'all' } : { kind: 'year', year: +y }); }
+
+  function selectValue(p) {
+    const Y = new Date().getFullYear();
+    if (p.kind === 'year') return p.year === Y ? 'thisYear' : p.year === Y - 1 ? 'lastYear' : 'y:' + p.year;
+    if (p.kind === 'preset') return p.id;
+    return p.kind;
+  }
+  function renderPeriod(hist, range) {
+    const Y = new Date().getFullYear();
+    const years = hist.years.filter(y => y < Y - 1).reverse();
+    const sel = $('periodSel');
+    sel.innerHTML = '<option value="all">All time</option>'
+      + PRESETS.map(([id, label]) => `<option value="${id}">${label}</option>`).join('')
+      + (years.length ? '<optgroup label="Earlier years">' + years.map(y => `<option value="y:${y}">${y}</option>`).join('') + '</optgroup>' : '')
+      + '<option value="custom">Custom dates…</option>';
+    sel.value = selectValue(state.period);
+    const custom = state.period.kind === 'custom' || $('periodCustom').dataset.open === '1';
+    $('periodCustom').hidden = !custom;
+    if (custom) sel.value = 'custom';
+    const recs = state.records;
+    if (recs.length) {
+      $('pFrom').min = $('pTo').min = isoDay(recs[0].t);
+      $('pFrom').max = $('pTo').max = isoDay(Math.max(recs[recs.length - 1].t, Date.now()));
+    }
+    if (state.period.kind === 'custom') { $('pFrom').value = state.period.from; $('pTo').value = state.period.to; }
+    $('periodDates').textContent = range.dates && state.period.kind !== 'custom' ? range.dates : '';
+  }
+
+  /* ---------- recent plays ---------- */
+  const clock = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const mmss = ms => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  function dayLabel(t) {
+    const d = new Date(t), now = new Date();
+    const diff = Math.round((dayStart(now.getFullYear(), now.getMonth(), now.getDate()) - dayStart(d.getFullYear(), d.getMonth(), d.getDate())) / DAY);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return d.toLocaleDateString(undefined, d.getFullYear() === now.getFullYear()
+      ? { weekday: 'long', month: 'long', day: 'numeric' } : { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function renderRecent() {
+    const range = state.range, recs = state.records;
+    if (!range || !recs) return;
+    const q = state.recentFilter.trim().toLowerCase();
+    const shown = [];
+    let total = 0;
+    for (let i = recs.length - 1; i >= 0; i--) {
+      const r = recs[i];
+      if (r.t >= range.to) continue;
+      if (r.t < range.from) break;
+      if (q && !(r.tr + '\n' + r.ar + '\n' + r.al).toLowerCase().includes(q)) continue;
+      total++;
+      if (shown.length < state.recentLimit) shown.push(r);
+    }
+    $('recentH').textContent = range.live ? 'Recently played' : `Plays ${range.phrase}`;
+    $('recentIntro').textContent = total
+      ? `${shown.length < total ? `The latest ${fmtN(shown.length)} of ${fmtN(total)}` : `All ${fmtN(total)}`} plays${q ? ` matching “${state.recentFilter.trim()}”` : ''}${range.live ? '' : ', newest first'}. Select one to see that artist.`
+      : '';
+    let html = '', day = null;
+    for (const r of shown) {
+      const dl = dayLabel(r.t);
+      if (dl !== day) { html += (day === null ? '' : '</ol>') + `<h3 class="day-h">${esc(dl)}</h3><ol class="plays">`; day = dl; }
+      const music = r.k === 'm';
+      const short = music && r.ms < state.minMs;
+      const len = r.x === 2
+        ? `<span title="Spotify doesn't report how much of a synced play was heard, so this is the song's length">${mmss(r.ms)}</span>`
+        : short ? `Skipped at ${mmss(r.ms)}` : mmss(r.ms);
+      const tag = music ? '' : '<span class="ptag">Podcast</span>';
+      const inner = `<span class="pt">${esc(clock(r.t))}</span>
+        <span class="who"><span class="nm">${esc(r.tr || 'Untitled')}</span><span class="sub">${esc(r.ar)}${tag}</span></span>
+        <span class="pal">${esc(r.al || '')}</span><span class="plen">${len}</span>`;
+      html += music
+        ? `<li><button class="play${short ? ' short' : ''}" type="button" data-artist="${esc(r.ar)}">${inner}</button></li>`
+        : `<li><div class="play">${inner}</div></li>`;
+    }
+    if (day !== null) html += '</ol>';
+    $('recentList').innerHTML = html || `<p class="empty">${q ? `No plays match “${esc(state.recentFilter.trim())}” in this period.` : 'No plays in this period.'}</p>`;
+    $('recentMore').hidden = shown.length >= total;
+    $('recentMore').textContent = `Show ${fmtN(Math.min(50, total - shown.length))} more`;
   }
 
   /* ---------- events ---------- */
@@ -1068,6 +1281,33 @@ if (typeof module !== 'undefined') module.exports = Core;
     try { localStorage.setItem('ln-minMs', String(state.minMs)); } catch (err) {}
     render();
   });
+  $('periodSel').addEventListener('change', e => {
+    const v = e.target.value;
+    if (v === 'custom') {
+      $('periodCustom').dataset.open = '1';
+      $('periodCustom').hidden = false;
+      const r = state.range && isFinite(state.range.from) ? state.range : periodRange({ kind: 'preset', id: '30d' });
+      $('pFrom').value = isoDay(r.from); $('pTo').value = isoDay(Math.min(r.to, Date.now() + DAY) - 1);
+      $('pFrom').focus();
+      return;
+    }
+    $('periodCustom').dataset.open = '';
+    setPeriod(v === 'all' ? { kind: 'all' } : v.startsWith('y:') ? { kind: 'year', year: +v.slice(2) } : { kind: 'preset', id: v });
+  });
+  const applyCustom = () => {
+    if (!$('pFrom').value || !$('pTo').value) { ($('pFrom').value ? $('pTo') : $('pFrom')).focus(); return; }
+    setPeriod({ kind: 'custom', from: $('pFrom').value, to: $('pTo').value });
+  };
+  $('pApply').addEventListener('click', applyCustom);
+  ['pFrom', 'pTo'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') applyCustom(); }));
+  let filterTimer = null;
+  $('recentFilter').addEventListener('input', e => {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => { state.recentFilter = e.target.value; state.recentLimit = 15; renderRecent(); }, 150);
+  });
+  $('recentMore').addEventListener('click', () => { state.recentLimit += 50; renderRecent(); });
+  window.addEventListener('hashchange', () => { const p = periodFromHash(); if (periodToHash(p) !== periodToHash(state.period)) setPeriod(p); });
+
   $('dlgClose').addEventListener('click', () => $('dlg').close());
   $('dlg').addEventListener('click', e => { if (e.target === $('dlg')) $('dlg').close(); });
   $('clearBtn').addEventListener('click', async () => {
@@ -1080,7 +1320,7 @@ if (typeof module !== 'undefined') module.exports = Core;
       if (!confirm('Remove your listening history from this browser? You can add the files again any time.')) return;
       await DB.del('records');
     }
-    state.records = null; state.hist = null; state.year = null;
+    state.records = null; state.hist = null; state.year = null; state.period = { kind: 'all' };
     setStatus('');
     showIntake();
   });
@@ -1090,6 +1330,8 @@ if (typeof module !== 'undefined') module.exports = Core;
   new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   /* ---------- start ---------- */
+  state.period = periodFromHash();
+  state.year = state.period.kind === 'year' ? state.period.year : null;
   (async () => {
     if (typeof Chart === 'undefined') setStatus('The chart library didn\'t load, so charts will be missing. Reload the page to try again.', true);
     if (API) {

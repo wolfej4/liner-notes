@@ -147,5 +147,6 @@ def oidc_redirect() -> str:
     return get("public_url") + "/auth/oidc/callback"
 
 
-def secure_cookies() -> bool:
-    return get("public_url").startswith("https://")
+def public_host() -> str:
+    from urllib.parse import urlsplit
+    return urlsplit(get("public_url")).netloc.lower()
