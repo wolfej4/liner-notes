@@ -8,12 +8,12 @@ automatically. Optional weekly and monthly recap emails summarize what they list
 
 1. **Deploy.** In Portainer: Stacks > Add stack > **Repository**, pointing at this repo (the web editor
    can't build images). Under **Environment variables**, add `PUBLIC_URL`, the address people will open
-   it at, e.g. `https://music.wolfe.house`. Data goes in the `liner-notes-data` Docker volume.
+   it at, e.g. `https://music.example.com`. Data goes in the `liner-notes-data` Docker volume.
 2. **Create the admin account.** Open the site; the first visit goes to a setup page. If you ran the
    earlier single-user version, its history and Spotify connection move into this account.
 3. **Create a Spotify app** at <https://developer.spotify.com/dashboard> (the owner needs Spotify Premium).
    Choose **Web API** and register the redirect URI shown on the admin page
-   (`https://music.wolfe.house/auth/callback`). Paste the client ID and secret into the admin page.
+   (`https://music.example.com/auth/callback`). Paste the client ID and secret into the admin page.
 4. **Add each person to the Spotify app's allowlist.** In development mode Spotify allows five people per
    app, and each one's Spotify email has to be added under **User Management** in the Spotify dashboard
    before they connect. Otherwise Spotify refuses, and Liner Notes tells them to ask you.
@@ -21,12 +21,13 @@ automatically. Optional weekly and monthly recap emails summarize what they list
    get a link to send them. Links work for 7 days.
 6. **Optional: email.** Add SMTP settings on the admin page to send invites, password links, and recaps.
    "Send me a test recap" checks everything end to end.
-7. **Optional: single sign-on.** Create an OIDC client in Pocket ID with the redirect URI shown on the
-   admin page (`https://music.wolfe.house/auth/oidc/callback`), then fill in the issuer URL, client ID,
-   and secret. Accounts are matched by email; new people still need an invite unless sign-up is open.
+7. **Optional: single sign-on.** Create an OIDC client in your identity provider with the redirect URI
+   shown on the admin page (`https://music.example.com/auth/oidc/callback`), then fill in the issuer URL,
+   client ID, and secret. Accounts are matched by email; new people still need an invite unless sign-up
+   is open.
 
-Liner Notes now has its own sign-in, so it no longer needs Pangolin's authentication in front of it.
-If you keep Pangolin auth on as well, people will sign in twice unless both use Pocket ID.
+Liner Notes has its own sign-in, so it doesn't need an authenticating reverse proxy in front of it. If
+you keep one on as well, people will sign in twice unless both use the same identity provider.
 
 ## Accounts
 
